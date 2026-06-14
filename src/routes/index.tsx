@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState, type FormEvent } from "react";
+import { useState } from "react";
 
 export const Route = createFileRoute("/")({
   component: Index,
@@ -331,47 +331,13 @@ function Faq() {
 }
 
 function Contact() {
-  const [sent, setSent] = useState(false);
-  function onSubmit(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    const fd = new FormData(e.currentTarget);
-    const name = fd.get("name");
-    const contact = fd.get("contact");
-    const task = fd.get("task");
-    const text = `Здравствуй, Tomas!%0AИмя: ${name}%0AКонтакт: ${contact}%0AЗадача: ${task}`;
-    window.open(`https://t.me/tomas?text=${text}`, "_blank");
-    setSent(true);
-  }
   return (
     <section id="contact" className="py-20 md:py-28">
       <div className="container-page">
-        <SectionHead tag="// 06 — контакты" title="Напиши — обсудим задачу" sub="Опиши идею в двух словах, я отвечу и предложу решение." />
-        <div className="grid gap-8 lg:grid-cols-[1fr_1.2fr]">
-          <div className="space-y-3">
-            <ContactLink href="https://t.me/tomas" label="Telegram" value="@tomas" />
-            <ContactLink href="mailto:hello@tomas.dev" label="Email" value="hello@tomas.dev" />
-            <ContactLink href="https://discord.com/users/tomas" label="Discord" value="tomas" />
-            <a
-              href="https://t.me/tomas"
-              className="mt-2 flex items-center justify-center gap-2 rounded-full bg-primary px-6 py-4 text-sm font-semibold text-primary-foreground transition hover:opacity-90 glow"
-            >
-              Написать сейчас
-            </a>
-          </div>
-          <form onSubmit={onSubmit} className="surface-card space-y-4 p-6 md:p-8">
-            <Field name="name" label="Имя" placeholder="Как тебя зовут" required />
-            <Field name="contact" label="Контакт для ответа" placeholder="Telegram, email или другое" required />
-            <Field name="task" label="Краткое описание задачи" placeholder="Что нужно сделать" textarea required />
-            <button
-              type="submit"
-              className="w-full rounded-full bg-primary px-6 py-3.5 text-sm font-semibold text-primary-foreground transition hover:opacity-90"
-            >
-              {sent ? "Отправлено ✓" : "Отправить заявку"}
-            </button>
-            <p className="text-center font-mono text-xs text-muted-foreground">
-              Заявка откроется в Telegram для подтверждения отправки
-            </p>
-          </form>
+        <SectionHead tag="// 06 — контакты" title="Напиши — обсудим задачу" sub="Выбери удобный способ связи, я отвечу и предложу решение." />
+        <div className="mx-auto max-w-xl space-y-3">
+          <ContactLink href="https://t.me/Tombirdi" label="Telegram" value="@Tombirdi" />
+          <ContactLink href="mailto:tombirdi732@gmail.com" label="Email" value="tombirdi732@gmail.com" />
         </div>
       </div>
     </section>
@@ -400,34 +366,6 @@ function ContactLink({ href, label, value }: { href: string; label: string; valu
   );
 }
 
-function Field({
-  name,
-  label,
-  placeholder,
-  textarea,
-  required,
-}: {
-  name: string;
-  label: string;
-  placeholder?: string;
-  textarea?: boolean;
-  required?: boolean;
-}) {
-  const cls =
-    "w-full rounded-lg border border-border bg-background px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground/60 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30";
-  return (
-    <label className="block">
-      <span className="mb-1.5 block font-mono text-xs uppercase tracking-wider text-muted-foreground">
-        {label}
-      </span>
-      {textarea ? (
-        <textarea name={name} placeholder={placeholder} required={required} rows={4} className={cls} />
-      ) : (
-        <input name={name} placeholder={placeholder} required={required} className={cls} />
-      )}
-    </label>
-  );
-}
 
 function Footer() {
   return (
