@@ -366,34 +366,6 @@ function ContactLink({ href, label, value }: { href: string; label: string; valu
   );
 }
 
-function Field({
-  name,
-  label,
-  placeholder,
-  textarea,
-  required,
-}: {
-  name: string;
-  label: string;
-  placeholder?: string;
-  textarea?: boolean;
-  required?: boolean;
-}) {
-  const cls =
-    "w-full rounded-lg border border-border bg-background px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground/60 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30";
-  return (
-    <label className="block">
-      <span className="mb-1.5 block font-mono text-xs uppercase tracking-wider text-muted-foreground">
-        {label}
-      </span>
-      {textarea ? (
-        <textarea name={name} placeholder={placeholder} required={required} rows={4} className={cls} />
-      ) : (
-        <input name={name} placeholder={placeholder} required={required} className={cls} />
-      )}
-    </label>
-  );
-}
 
 function Footer() {
   return (
