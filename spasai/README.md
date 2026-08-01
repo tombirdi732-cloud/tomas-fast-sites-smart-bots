@@ -8,10 +8,10 @@
 | 2 | Авторизация по телефону, JWT, guard'ы по ролям | ✅ готово |
 | 3 | Ядро API: боксы, геопоиск, заказы, бизнес-логика | ✅ готово |
 | 4 | Панель заведения | ✅ готово |
-| 5 | Мобильное приложение | — |
+| 5 | Мобильное приложение | ✅ готово |
 | 6 | Платежи (ЮKassa) | — |
 | 7 | Пуши и фоновые задачи | — |
-| 8 | Админка | — |
+| 8 | Админка | ✅ готово (API) |
 | 9 | Продакшн | — |
 
 ## Структура
@@ -170,6 +170,17 @@ GET    /reviews?merchantId=        публичный
 POST   /reviews/:id/reply          роль merchant
 
 GET    /favorites   POST /favorites   DELETE /favorites/:merchantId
+
+GET    /admin/merchants?status               роль admin
+POST   /admin/merchants/:id/approve
+POST   /admin/merchants/:id/reject           { reason }
+POST   /admin/merchants/:id/suspend          { reason }
+PATCH  /admin/merchants/:id/commission       { commissionRate }
+GET    /admin/settings   PATCH /admin/settings
+GET    /admin/users?search   PATCH /admin/users/:id/block
+GET    /admin/orders?status  POST  /admin/orders/:id/refund
+GET    /admin/stats                          GMV, выручка платформы, топ заведений
+POST   /admin/maintenance/run                прогнать фоновые задачи вручную
 ```
 
 Владелец нескольких точек передаёт `?merchantId=` в эндпоинты `/merchants/me/*`;

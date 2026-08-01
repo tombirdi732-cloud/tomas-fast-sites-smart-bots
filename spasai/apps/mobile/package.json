@@ -6,8 +6,8 @@
   "description": "Мобильное приложение покупателя «Спасай»",
   "scripts": {
     "start": "expo start",
-    "android": "expo start --android",
-    "ios": "expo start --ios",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
     "prebuild": "expo prebuild --platform android --clean",
     "apk": "cd android && ./gradlew assembleRelease",
     "typecheck": "tsc --noEmit"

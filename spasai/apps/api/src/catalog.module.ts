@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 
+import { AdminController } from './admin/admin.controller';
 import { BoxesController, MerchantBoxesController } from './boxes/boxes.controller';
 import { BoxesService } from './boxes/boxes.service';
 import { MerchantsController } from './merchants/merchants.controller';
@@ -22,6 +23,7 @@ import { FavoritesController, ReviewsController } from './social/social.controll
     MerchantOrdersController,
     ReviewsController,
     FavoritesController,
+    AdminController,
   ],
   providers: [MerchantsService, BoxesService, OrdersService, SchedulerService],
   exports: [MerchantsService, BoxesService, OrdersService],
