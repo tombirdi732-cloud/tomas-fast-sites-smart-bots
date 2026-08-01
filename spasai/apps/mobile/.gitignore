@@ -1,0 +1,4 @@
+# Нативные проекты генерируются командой `npx expo prebuild`
+android/
+ios/
+.expo/

@@ -82,7 +82,16 @@ function makeService(box: Partial<BoxState> = {}, serviceFee = 2_900, commission
     $transaction: jest.fn((fn: (tx: unknown) => Promise<unknown>) => fn(client)),
   };
 
-  return { service: new OrdersService(prisma as never), state, prisma, client };
+  // Уведомления в этих тестах не проверяются — подставляем заглушку.
+  const notifications = { notify: jest.fn(() => Promise.resolve()) };
+
+  return {
+    service: new OrdersService(prisma as never, notifications as never),
+    state,
+    prisma,
+    client,
+    notifications,
+  };
 }
 
 describe('OrdersService.create — резервирование (раздел 7.2)', () => {

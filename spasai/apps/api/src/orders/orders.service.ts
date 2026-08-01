@@ -1,11 +1,12 @@
 import { randomInt } from 'node:crypto';
 
 import { Injectable, Logger } from '@nestjs/common';
-import { Box, BoxStatus, Order, OrderStatus, Prisma } from '@prisma/client';
+import { Box, BoxStatus, NotificationType, Order, OrderStatus, Prisma } from '@prisma/client';
 
 import { ApiException } from '../common/errors/api-error';
 import { BoxErrorCode, OrderErrorCode } from '../common/errors/error-codes';
 import { calculateOrderAmounts, formatKopecks } from '../common/money';
+import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 
 /** Заказ ждёт оплаты 10 минут, потом бронь снимается (раздел 7.2 ТЗ). */
@@ -26,7 +27,10 @@ type BoxRow = Pick<
 export class OrdersService {
   private readonly logger = new Logger(OrdersService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notifications: NotificationsService,
+  ) {}
 
   /**
    * Создание заказа с транзакционным резервированием (раздел 7.2 ТЗ).
@@ -171,6 +175,15 @@ export class OrdersService {
         });
 
         this.logger.log(`Заказ ${orderId} оплачен: ${formatKopecks(order.total)} ₽, код ${pickupCode}`);
+
+        await this.notifications.notify({
+          userId: order.userId,
+          type: NotificationType.order_paid,
+          title: 'Заказ оплачен',
+          body: `Код выдачи ${pickupCode}. Покажите его на кассе.`,
+          data: { orderId: order.id, type: 'order_paid' },
+        });
+
         return order;
       } catch (error) {
         // Частичный UNIQUE (заведение + код + сутки) — пробуем другой код.

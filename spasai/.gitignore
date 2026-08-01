@@ -10,3 +10,6 @@ coverage/
 
 # Prisma
 apps/api/src/generated/
+
+# Собранные APK лежат вне git — они большие
+dist/

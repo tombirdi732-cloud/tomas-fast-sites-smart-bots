@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import type { ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import { ApiError, api, clearTokens, getRefreshToken, loadTokens } from './api';
+import { ApiError, api, clearTokens, getRefreshToken, loadApiUrl, loadTokens } from './api';
 import type { Me } from './api';
 
 const ONBOARDED_KEY = 'spasai.onboarded';
@@ -39,6 +39,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     void (async () => {
+      await loadApiUrl();
       setOnboarded((await AsyncStorage.getItem(ONBOARDED_KEY)) === 'true');
       await reload();
       setReady(true);

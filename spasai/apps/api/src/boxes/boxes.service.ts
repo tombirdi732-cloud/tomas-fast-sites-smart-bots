@@ -5,6 +5,7 @@ import { ApiException } from '../common/errors/api-error';
 import { BoxErrorCode } from '../common/errors/error-codes';
 import { discountPercent } from '../common/money';
 import { MerchantsService } from '../merchants/merchants.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateBoxDto, SearchBoxesDto, UpdateBoxDto } from './boxes.dto';
 
@@ -73,6 +74,7 @@ export class BoxesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly merchants: MerchantsService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   /**
@@ -162,6 +164,10 @@ export class BoxesService {
     });
 
     this.logger.log(`Бокс создан: ${box.title} (${merchant.title}), остаток ${box.quantityLeft}`);
+
+    // 7.9: «в вашем избранном заведении появился бокс».
+    await this.notifications.notifyFavoritesAboutBox(merchant.id, box.id, box.title);
+
     return box;
   }
 

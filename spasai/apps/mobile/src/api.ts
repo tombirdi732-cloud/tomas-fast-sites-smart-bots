@@ -2,13 +2,41 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
 
 /**
- * Клиент API. Адрес берётся из app.json → extra.apiUrl.
- * На эмуляторе Android хост-машина доступна как 10.0.2.2.
+ * Адрес API. По умолчанию берётся из app.json → extra.apiUrl
+ * (на эмуляторе Android хост-машина доступна как 10.0.2.2),
+ * но пользователь может задать свой — в собранном APK это единственный
+ * способ указать, где живёт бэкенд.
  */
-const BASE = (Constants.expoConfig?.extra?.apiUrl as string | undefined) ?? 'http://10.0.2.2:3000/api';
+const DEFAULT_BASE =
+  (Constants.expoConfig?.extra?.apiUrl as string | undefined) ?? 'http://10.0.2.2:3000/api';
 
 const ACCESS_KEY = 'spasai.access';
 const REFRESH_KEY = 'spasai.refresh';
+const BASE_URL_KEY = 'spasai.apiUrl';
+
+let BASE = DEFAULT_BASE;
+
+export function getApiUrl(): string {
+  return BASE;
+}
+
+export async function loadApiUrl(): Promise<string> {
+  const stored = await AsyncStorage.getItem(BASE_URL_KEY);
+  if (stored) BASE = stored;
+  return BASE;
+}
+
+/** Сохранить адрес сервера. Пустая строка возвращает значение по умолчанию. */
+export async function setApiUrl(url: string): Promise<void> {
+  const trimmed = url.trim().replace(/\/+$/, '');
+  if (trimmed) {
+    BASE = trimmed;
+    await AsyncStorage.setItem(BASE_URL_KEY, trimmed);
+  } else {
+    BASE = DEFAULT_BASE;
+    await AsyncStorage.removeItem(BASE_URL_KEY);
+  }
+}
 
 export class ApiError extends Error {
   constructor(

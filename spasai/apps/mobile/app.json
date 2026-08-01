@@ -13,8 +13,13 @@
     },
     "android": {
       "package": "ru.spasai.app",
-      "adaptiveIcon": { "backgroundColor": "#FFD400" },
-      "permissions": ["ACCESS_COARSE_LOCATION", "ACCESS_FINE_LOCATION"],
+      "adaptiveIcon": {
+        "backgroundColor": "#FFD400"
+      },
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION"
+      ],
       "edgeToEdgeEnabled": true
     },
     "ios": {
@@ -29,6 +34,14 @@
         "expo-location",
         {
           "locationWhenInUsePermission": "Чтобы показать боксы рядом с вами"
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "usesCleartextTraffic": true
+          }
         }
       ]
     ],

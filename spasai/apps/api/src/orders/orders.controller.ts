@@ -16,14 +16,16 @@ import { AuthUser, CurrentUser, Roles } from '../auth/auth.decorators';
 import { ApiException } from '../common/errors/api-error';
 import type { Env } from '../config/env';
 import { MerchantsService } from '../merchants/merchants.service';
+import { YookassaService } from '../payments/yookassa.service';
+import { PrismaService } from '../prisma/prisma.service';
 import { CollectOrderDto, CreateOrderDto } from './orders.dto';
 import { OrdersService } from './orders.service';
 
 interface CreateOrderResponse {
   order: Order;
   /**
-   * Ссылка на оплату. Появится на этапе 6 (ЮKassa); пока null,
-   * а в dev-режиме заказ можно провести через POST /orders/:id/pay-dev.
+   * Ссылка на оплату в ЮKassa. null, если ключи магазина не заданы —
+   * тогда в dev-режиме заказ проводится через POST /orders/:id/pay-dev.
    */
   paymentUrl: string | null;
 }
@@ -33,16 +35,41 @@ export class OrdersController {
   constructor(
     private readonly orders: OrdersService,
     private readonly config: ConfigService<Env, true>,
+    private readonly yookassa: YookassaService,
+    private readonly prisma: PrismaService,
   ) {}
 
-  /** Создание заказа: количество резервируется сразу, транзакционно. */
+  /**
+   * Создание заказа: количество резервируется сразу, транзакционно,
+   * затем создаётся платёж в ЮKassa с фискальным чеком.
+   */
   @Post()
   async create(
     @CurrentUser() user: AuthUser,
     @Body() dto: CreateOrderDto,
   ): Promise<CreateOrderResponse> {
     const order = await this.orders.create(user.id, dto.boxId, dto.quantity);
-    return { order, paymentUrl: null };
+
+    if (!this.yookassa.enabled) {
+      return { order, paymentUrl: null };
+    }
+
+    const box = await this.prisma.box.findUniqueOrThrow({
+      where: { id: order.boxId },
+      select: { title: true },
+    });
+
+    const payment = await this.yookassa.createPayment(order, {
+      boxTitle: box.title,
+      customerPhone: user.phone,
+    });
+
+    await this.prisma.order.update({
+      where: { id: order.id },
+      data: { paymentId: payment.paymentId },
+    });
+
+    return { order, paymentUrl: payment.confirmationUrl };
   }
 
   @Get()

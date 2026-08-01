@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, Text, TextInput } from 'react-native';
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { ApiError, api, saveTokens } from '../api';
+import { ApiError, api, getApiUrl, saveTokens, setApiUrl } from '../api';
 import { Button, Notice } from '../components';
 import { useSession } from '../session';
 import { useTheme } from '../theme';
@@ -18,6 +18,9 @@ export function LoginScreen() {
   const [hint, setHint] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // Адрес бэкенда: в собранном APK его нужно указать вручную.
+  const [serverOpen, setServerOpen] = useState(false);
+  const [server, setServer] = useState(getApiUrl());
 
   const input = {
     backgroundColor: theme.card,
@@ -106,6 +109,37 @@ export function LoginScreen() {
               <Text style={{ color: theme.inkFaint, fontSize: 13 }}>
                 Код можно запросить не чаще раза в минуту.
               </Text>
+
+              <Pressable onPress={() => setServerOpen((open) => !open)} hitSlop={8}>
+                <Text style={{ color: theme.inkSoft, fontSize: 13, textDecorationLine: 'underline' }}>
+                  Сервер: {getApiUrl()}
+                </Text>
+              </Pressable>
+
+              {serverOpen && (
+                <>
+                  <TextInput
+                    style={input}
+                    value={server}
+                    onChangeText={setServer}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    keyboardType="url"
+                    placeholder="http://192.168.0.10:3000/api"
+                    placeholderTextColor={theme.inkFaint}
+                  />
+                  <Button
+                    title="Сохранить адрес"
+                    variant="ghost"
+                    onPress={() => {
+                      void setApiUrl(server).then(() => {
+                        setServer(getApiUrl());
+                        setServerOpen(false);
+                      });
+                    }}
+                  />
+                </>
+              )}
             </>
           ) : (
             <>

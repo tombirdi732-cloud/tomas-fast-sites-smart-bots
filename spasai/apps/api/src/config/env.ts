@@ -39,6 +39,16 @@ export const envSchema = z.object({
   SMS_RESEND_COOLDOWN: z.coerce.number().int().positive().default(60),
   /** Сколько раз можно ошибиться в коде, прежде чем он сгорит. */
   SMS_MAX_ATTEMPTS: z.coerce.number().int().positive().default(5),
+
+  /** ЮKassa. Пустые значения выключают приём платежей (этап 6). */
+  YOOKASSA_SHOP_ID: z.string().default(''),
+  YOOKASSA_SECRET_KEY: z.string().default(''),
+  YOOKASSA_RETURN_URL: z.string().default('spasai://payment-result'),
+
+  /** Firebase Cloud Messaging (этап 7). Пустое значение выключает пуши. */
+  FCM_PROJECT_ID: z.string().default(''),
+  FCM_CLIENT_EMAIL: z.string().default(''),
+  FCM_PRIVATE_KEY: z.string().default(''),
 });
 
 export type Env = z.infer<typeof envSchema>;

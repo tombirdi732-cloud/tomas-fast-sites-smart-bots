@@ -2,12 +2,10 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 
 import { BoxesService } from '../boxes/boxes.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { OrdersService } from '../orders/orders.service';
 
-/**
- * Фоновые задачи из раздела 7 ТЗ.
- * Пуши (7.9) подключаются на этапе 7 — здесь только состояние заказов и боксов.
- */
+/** Фоновые задачи из раздела 7 ТЗ: состояние заказов, боксов и напоминания. */
 @Injectable()
 export class SchedulerService {
   private readonly logger = new Logger(SchedulerService.name);
@@ -15,6 +13,7 @@ export class SchedulerService {
   constructor(
     private readonly boxes: BoxesService,
     private readonly orders: OrdersService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   /**
@@ -35,5 +34,11 @@ export class SchedulerService {
   @Cron(CronExpression.EVERY_MINUTE, { name: 'release-unpaid' })
   async releaseUnpaid(): Promise<void> {
     await this.orders.releaseUnpaidOrders();
+  }
+
+  /** Каждые 10 минут (7.9): напомнить о заказе за час до конца окна выдачи. */
+  @Cron(CronExpression.EVERY_10_MINUTES, { name: 'pickup-reminders' })
+  async pickupReminders(): Promise<void> {
+    await this.notifications.remindAboutPickup();
   }
 }
