@@ -22,6 +22,7 @@ spasai/
 │   ├── api/          NestJS + Prisma — бэкенд
 │   ├── web/          панель заведения (React + Vite), админка — этап 8
 │   └── mobile/       Expo-приложение покупателя (React Native + Expo)
+├── deploy/           боевой compose, nginx, инструкция по серверу
 └── docker-compose.yml
 ```
 
@@ -248,6 +249,11 @@ npx eas build --platform android --profile production
 и запустите API с `--host 0.0.0.0` (он и так слушает все интерфейсы).
 
 ## Продакшн
+
+Пошаговая инструкция по серверу, домену, сертификату и регламенту —
+в [`deploy/README.md`](deploy/README.md). Коротко: облачный сервер KVM,
+Ubuntu 24.04, от 2 vCPU / 4 ГБ / 40 ГБ NVMe, обязательно в России (152-ФЗ),
+плюс домен для вебхука ЮKassa.
 
 - **CI** — `.github/workflows/spasai-ci.yml`: линт, типы, тесты и сборка для
   API, панели и мобильного приложения; миграции проверяются на чистой базе

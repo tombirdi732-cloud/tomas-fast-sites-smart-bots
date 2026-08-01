@@ -13,3 +13,7 @@ apps/api/src/generated/
 
 # Собранные APK лежат вне git — они большие
 dist/
+
+# Боевые секреты и дампы
+deploy/.env
+deploy/backups/*.sql.gz

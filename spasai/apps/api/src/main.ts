@@ -9,6 +9,7 @@ const sentryEnabled = initObservability();
 import { Logger, ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
+import type { NestExpressApplication } from '@nestjs/platform-express';
 import helmet from 'helmet';
 
 import { AppModule } from './app.module';
@@ -16,12 +17,16 @@ import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import type { Env } from './config/env';
 
 async function bootstrap(): Promise<void> {
-  const app = await NestFactory.create(AppModule, { bufferLogs: true });
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, { bufferLogs: true });
   const config = app.get(ConfigService<Env, true>);
 
   const port = config.get('PORT', { infer: true });
   const apiPrefix = config.get('API_PREFIX', { infer: true });
   const corsOrigins = config.get('CORS_ORIGINS', { infer: true });
+
+  // За nginx настоящий адрес клиента приходит в X-Forwarded-For.
+  // Без этого проверка источника вебхука ЮKassa увидит IP прокси и всё отвергнет.
+  app.set('trust proxy', 1);
 
   app.setGlobalPrefix(apiPrefix);
   app.use(helmet());
