@@ -88,6 +88,7 @@ model User {
   reviews       Review[]
   favorites     Favorite[]
   notifications Notification[]
+  refreshTokens RefreshToken[]
 
   @@index([role])
   @@map("users")
@@ -298,6 +299,24 @@ model PhoneVerification {
 
   @@index([phone, createdAt])
   @@map("phone_verifications")
+}
+
+/// Выданные refresh-токены. Хранится только HMAC-хэш — по утечке БД
+/// восстановить токен нельзя. При обновлении пары токен ротируется:
+/// старый помечается revoked_at, выдаётся новый.
+model RefreshToken {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  tokenHash String    @unique @map("token_hash") @db.VarChar(64)
+  expiresAt DateTime  @map("expires_at") @db.Timestamptz(6)
+  revokedAt DateTime? @map("revoked_at") @db.Timestamptz(6)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, revokedAt])
+  @@index([expiresAt])
+  @@map("refresh_tokens")
 }
 
 /// Глобальные настройки платформы (комиссия по умолчанию, сервисный сбор).

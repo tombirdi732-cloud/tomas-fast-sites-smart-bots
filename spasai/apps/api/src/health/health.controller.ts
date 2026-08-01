@@ -1,5 +1,6 @@
 import { Controller, Get } from '@nestjs/common';
 
+import { Public } from '../auth/auth.decorators';
 import { PrismaService } from '../prisma/prisma.service';
 
 interface HealthResponse {
@@ -10,6 +11,7 @@ interface HealthResponse {
   db: { connected: boolean; postgis: string | null };
 }
 
+@Public()
 @Controller('health')
 export class HealthController {
   constructor(private readonly prisma: PrismaService) {}

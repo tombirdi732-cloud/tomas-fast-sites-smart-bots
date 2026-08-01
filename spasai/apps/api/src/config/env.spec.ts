@@ -31,8 +31,20 @@ describe('validateEnv', () => {
     ).toThrow(/SMS_STUB/);
   });
 
-  it('разрешает production при SMS_STUB=false', () => {
-    const env = validateEnv({ ...base, NODE_ENV: 'production', SMS_STUB: 'false' });
+  it('разрешает production при заданных секретах', () => {
+    const env = validateEnv({
+      ...base,
+      NODE_ENV: 'production',
+      SMS_STUB: 'false',
+      JWT_SECRET: 'prod-jwt-secret-0123456789',
+      AUTH_HASH_SECRET: 'prod-hash-secret-0123456789',
+    });
     expect(env.SMS_STUB).toBe(false);
+  });
+
+  it('не даёт выкатить прод с дефолтным JWT_SECRET', () => {
+    expect(() =>
+      validateEnv({ ...base, NODE_ENV: 'production', SMS_STUB: 'false' }),
+    ).toThrow(/JWT_SECRET/);
   });
 });

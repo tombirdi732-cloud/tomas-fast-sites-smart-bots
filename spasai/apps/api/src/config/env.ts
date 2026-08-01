@@ -23,6 +23,22 @@ export const envSchema = z.object({
     .enum(['true', 'false'])
     .default('true')
     .transform((value) => value === 'true'),
+
+  /** Подпись JWT. В production обязателен собственный секрет. */
+  JWT_SECRET: z.string().min(16).default('dev-only-secret-change-me'),
+  /** Время жизни access-токена, секунды. */
+  JWT_ACCESS_TTL: z.coerce.number().int().positive().default(15 * 60),
+  /** Время жизни refresh-токена, секунды. */
+  JWT_REFRESH_TTL: z.coerce.number().int().positive().default(30 * 24 * 3600),
+  /** Секрет для HMAC-хэширования SMS-кодов и refresh-токенов в БД. */
+  AUTH_HASH_SECRET: z.string().min(16).default('dev-only-hash-secret-change-me'),
+
+  /** Время жизни SMS-кода, секунды. */
+  SMS_CODE_TTL: z.coerce.number().int().positive().default(5 * 60),
+  /** Не чаще одного кода в минуту на номер (раздел 10 ТЗ). */
+  SMS_RESEND_COOLDOWN: z.coerce.number().int().positive().default(60),
+  /** Сколько раз можно ошибиться в коде, прежде чем он сгорит. */
+  SMS_MAX_ATTEMPTS: z.coerce.number().int().positive().default(5),
 });
 
 export type Env = z.infer<typeof envSchema>;
@@ -37,8 +53,16 @@ export function validateEnv(raw: Record<string, unknown>): Env {
     throw new Error(`Некорректная конфигурация окружения:\n${details}`);
   }
 
-  if (parsed.data.NODE_ENV === 'production' && parsed.data.SMS_STUB) {
-    throw new Error('SMS_STUB=true недопустим при NODE_ENV=production');
+  if (parsed.data.NODE_ENV === 'production') {
+    if (parsed.data.SMS_STUB) {
+      throw new Error('SMS_STUB=true недопустим при NODE_ENV=production');
+    }
+    if (parsed.data.JWT_SECRET.startsWith('dev-only')) {
+      throw new Error('JWT_SECRET обязателен при NODE_ENV=production');
+    }
+    if (parsed.data.AUTH_HASH_SECRET.startsWith('dev-only')) {
+      throw new Error('AUTH_HASH_SECRET обязателен при NODE_ENV=production');
+    }
   }
 
   return parsed.data;
