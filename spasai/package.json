@@ -15,7 +15,9 @@
     "db:down": "docker compose down",
     "db:migrate": "npm run prisma:migrate -w @spasai/api",
     "db:deploy": "npm run prisma:deploy -w @spasai/api",
-    "db:reset": "npm run prisma:reset -w @spasai/api"
+    "db:reset": "npm run prisma:reset -w @spasai/api",
+    "web:dev": "npm run dev -w @spasai/web",
+    "web:build": "npm run build -w @spasai/web"
   },
   "engines": {
     "node": ">=20.11"

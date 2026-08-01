@@ -7,7 +7,7 @@
 | 1 | Фундамент: монорепо, NestJS + Prisma + PostgreSQL/PostGIS, схема БД, миграции, docker-compose | ✅ готово |
 | 2 | Авторизация по телефону, JWT, guard'ы по ролям | ✅ готово |
 | 3 | Ядро API: боксы, геопоиск, заказы, бизнес-логика | ✅ готово |
-| 4 | Панель заведения | — |
+| 4 | Панель заведения | ✅ готово |
 | 5 | Мобильное приложение | — |
 | 6 | Платежи (ЮKassa) | — |
 | 7 | Пуши и фоновые задачи | — |
@@ -20,7 +20,7 @@
 spasai/
 ├── apps/
 │   ├── api/          NestJS + Prisma — бэкенд
-│   ├── web/          панель заведения и админка (этапы 4 и 8)
+│   ├── web/          панель заведения (React + Vite), админка — этап 8
 │   └── mobile/       Expo-приложение покупателя (этап 5)
 └── docker-compose.yml
 ```
@@ -68,6 +68,7 @@ docker compose --profile api up -d
 
 ```bash
 npm run api:dev        # NestJS в watch-режиме
+npm run web:dev        # панель заведения на http://localhost:5173
 npm run api:build      # сборка
 npm run api:test       # юнит-тесты
 npm run db:migrate     # prisma migrate dev — создать новую миграцию
