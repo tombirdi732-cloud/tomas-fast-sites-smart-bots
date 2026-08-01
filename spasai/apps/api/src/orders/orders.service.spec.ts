@@ -1,0 +1,224 @@
+import { BoxStatus, OrderStatus } from '@prisma/client';
+
+import { BoxErrorCode, OrderErrorCode } from '../common/errors/error-codes';
+import { FREE_CANCELLATION_LEAD_MS, OrdersService } from './orders.service';
+
+const HOUR = 60 * 60 * 1000;
+
+interface BoxState {
+  id: string;
+  merchantId: string;
+  price: number;
+  quantityLeft: number;
+  quantityTotal: number;
+  status: BoxStatus;
+  pickupStart: Date;
+  pickupEnd: Date;
+}
+
+/**
+ * Прима-заглушка с одним боксом. Транзакция выполняется тем же клиентом —
+ * блокировку строки мы здесь не воспроизводим, зато проверяем всю логику
+ * пересчёта остатков и статусов, которая внутри неё живёт.
+ */
+function makeService(box: Partial<BoxState> = {}, serviceFee = 2_900, commissionRate = 0.2) {
+  const state: BoxState = {
+    id: 'b1',
+    merchantId: 'm1',
+    price: 29_900,
+    quantityLeft: 2,
+    quantityTotal: 2,
+    status: BoxStatus.active,
+    pickupStart: new Date(Date.now() - HOUR),
+    pickupEnd: new Date(Date.now() + 3 * HOUR),
+    ...box,
+  };
+
+  const createdOrders: Record<string, unknown>[] = [];
+
+  const client = {
+    $queryRaw: jest.fn(() =>
+      Promise.resolve([
+        {
+          id: state.id,
+          merchant_id: state.merchantId,
+          price: state.price,
+          quantity_left: state.quantityLeft,
+          status: state.status,
+          pickup_start: state.pickupStart,
+          pickup_end: state.pickupEnd,
+        },
+      ]),
+    ),
+    merchant: {
+      findUniqueOrThrow: jest.fn(() => Promise.resolve({ commissionRate, title: 'Пекарня' })),
+    },
+    platformSettings: {
+      findUnique: jest.fn(() => Promise.resolve({ serviceFee })),
+    },
+    box: {
+      update: jest.fn((args: { data: { quantityLeft?: number; status?: BoxStatus } }) => {
+        if (args.data.quantityLeft !== undefined) state.quantityLeft = args.data.quantityLeft;
+        if (args.data.status !== undefined) state.status = args.data.status;
+        return Promise.resolve(state);
+      }),
+      findUniqueOrThrow: jest.fn(() => Promise.resolve(state)),
+    },
+    order: {
+      create: jest.fn((args: { data: Record<string, unknown> }) => {
+        const order = { id: `o${createdOrders.length + 1}`, ...args.data };
+        createdOrders.push(order);
+        return Promise.resolve(order);
+      }),
+      findFirst: jest.fn(() => Promise.resolve(null)),
+      update: jest.fn((args: { data: Record<string, unknown> }) =>
+        Promise.resolve({ id: 'o1', ...args.data }),
+      ),
+    },
+  };
+
+  const prisma = {
+    ...client,
+    $transaction: jest.fn((fn: (tx: unknown) => Promise<unknown>) => fn(client)),
+  };
+
+  return { service: new OrdersService(prisma as never), state, prisma, client };
+}
+
+describe('OrdersService.create — резервирование (раздел 7.2)', () => {
+  it('уменьшает остаток и считает деньги по формулам 7.4', async () => {
+    const { service, state } = makeService();
+
+    const order = (await service.create('u1', 'b1', 2)) as unknown as {
+      quantity: number;
+      boxPrice: number;
+      serviceFee: number;
+      total: number;
+      commissionAmount: number;
+      status: OrderStatus;
+    };
+
+    expect(order.total).toBe(29_900 * 2 + 2_900);
+    expect(order.commissionAmount).toBe(Math.round(29_900 * 2 * 0.2));
+    expect(order.serviceFee).toBe(2_900);
+    expect(order.status).toBe(OrderStatus.pending_payment);
+    expect(state.quantityLeft).toBe(0);
+  });
+
+  it('переводит бокс в sold_out, когда разобрали последний', async () => {
+    const { service, state } = makeService({ quantityLeft: 1, quantityTotal: 1 });
+
+    await service.create('u1', 'b1', 1);
+
+    expect(state.quantityLeft).toBe(0);
+    expect(state.status).toBe(BoxStatus.sold_out);
+  });
+
+  it('не даёт заказать больше, чем осталось', async () => {
+    const { service, state } = makeService({ quantityLeft: 1 });
+
+    await expect(service.create('u1', 'b1', 2)).rejects.toMatchObject({
+      code: BoxErrorCode.NOT_ENOUGH_QUANTITY,
+    });
+    expect(state.quantityLeft).toBe(1);
+  });
+
+  it('не продаёт неактивный бокс', async () => {
+    const { service } = makeService({ status: BoxStatus.sold_out });
+
+    await expect(service.create('u1', 'b1', 1)).rejects.toMatchObject({
+      code: BoxErrorCode.BOX_NOT_ACTIVE,
+    });
+  });
+
+  it('не продаёт бокс с закрытым окном выдачи', async () => {
+    const { service } = makeService({ pickupEnd: new Date(Date.now() - 1000) });
+
+    await expect(service.create('u1', 'b1', 1)).rejects.toMatchObject({
+      code: BoxErrorCode.BOX_NOT_ACTIVE,
+    });
+  });
+
+  it('блокирует строку бокса перед списанием остатка', async () => {
+    const { service, client } = makeService();
+
+    await service.create('u1', 'b1', 1);
+
+    // $queryRaw вызывается как tagged template: первый аргумент — массив строк.
+    const calls = client.$queryRaw.mock.calls as unknown as Array<[TemplateStringsArray]>;
+    expect(calls[0]?.[0].join(' ')).toContain('FOR UPDATE');
+  });
+});
+
+describe('OrdersService.cancelByCustomer — отмена (раздел 7.7)', () => {
+  function withOrder(overrides: {
+    status?: OrderStatus;
+    pickupStart?: Date;
+    paidAt?: Date | null;
+  }) {
+    const built = makeService();
+    const order = {
+      id: 'o1',
+      userId: 'u1',
+      boxId: 'b1',
+      quantity: 1,
+      status: overrides.status ?? OrderStatus.paid,
+      paidAt: overrides.paidAt === undefined ? new Date() : overrides.paidAt,
+      box: {
+        ...built.state,
+        pickupStart: overrides.pickupStart ?? new Date(Date.now() + 5 * HOUR),
+      },
+    };
+    built.client.order.findFirst = jest.fn(() => Promise.resolve(order)) as never;
+    return built;
+  }
+
+  it('возвращает количество в бокс при отмене заранее', async () => {
+    const built = withOrder({ pickupStart: new Date(Date.now() + 5 * HOUR) });
+    built.state.quantityLeft = 0;
+    built.state.status = BoxStatus.sold_out;
+
+    const cancelled = (await built.service.cancelByCustomer('u1', 'o1')) as unknown as {
+      status: OrderStatus;
+    };
+
+    expect(cancelled.status).toBe(OrderStatus.refunded);
+    expect(built.state.quantityLeft).toBe(1);
+    // Бокс снова в продаже, раз окно ещё открыто.
+    expect(built.state.status).toBe(BoxStatus.active);
+  });
+
+  it('запрещает отмену позже чем за 2 часа до начала выдачи', async () => {
+    const built = withOrder({ pickupStart: new Date(Date.now() + HOUR) });
+
+    await expect(built.service.cancelByCustomer('u1', 'o1')).rejects.toMatchObject({
+      code: OrderErrorCode.CANCELLATION_WINDOW_PASSED,
+    });
+  });
+
+  it('неоплаченный заказ можно отменить в любой момент', async () => {
+    const built = withOrder({
+      status: OrderStatus.pending_payment,
+      paidAt: null,
+      pickupStart: new Date(Date.now() + 10 * 60 * 1000),
+    });
+
+    const cancelled = (await built.service.cancelByCustomer('u1', 'o1')) as unknown as {
+      status: OrderStatus;
+    };
+
+    expect(cancelled.status).toBe(OrderStatus.cancelled);
+  });
+
+  it('уже полученный заказ отменить нельзя', async () => {
+    const built = withOrder({ status: OrderStatus.collected });
+
+    await expect(built.service.cancelByCustomer('u1', 'o1')).rejects.toMatchObject({
+      code: OrderErrorCode.ORDER_NOT_CANCELLABLE,
+    });
+  });
+
+  it('граница бесплатной отмены — ровно 2 часа', () => {
+    expect(FREE_CANCELLATION_LEAD_MS).toBe(2 * 60 * 60 * 1000);
+  });
+});

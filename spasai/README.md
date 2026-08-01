@@ -5,8 +5,8 @@
 | Этап | Что | Статус |
 |---|---|---|
 | 1 | Фундамент: монорепо, NestJS + Prisma + PostgreSQL/PostGIS, схема БД, миграции, docker-compose | ✅ готово |
-| 2 | Авторизация по телефону, JWT, guard'ы по ролям | — |
-| 3 | Ядро API: боксы, геопоиск, заказы, бизнес-логика | — |
+| 2 | Авторизация по телефону, JWT, guard'ы по ролям | ✅ готово |
+| 3 | Ядро API: боксы, геопоиск, заказы, бизнес-логика | ✅ готово |
 | 4 | Панель заведения | — |
 | 5 | Мобильное приложение | — |
 | 6 | Платежи (ЮKassa) | — |
@@ -131,6 +131,62 @@ ORDER BY distance_m;
 > в `prisma/migrations/20260801120000_init/migration.sql` — Prisma их не умеет
 > выражать в схеме. При `prisma migrate dev` **проверяйте сгенерированный SQL**:
 > если Prisma попытается их удалить, уберите эти строки из новой миграции.
+
+## Эндпоинты
+
+Все пути с префиксом `/api`. Без пометки «публичный» требуется
+`Authorization: Bearer <access>`.
+
+```
+POST   /auth/request-code          публичный, 1 код в минуту на номер
+POST   /auth/verify-code           публичный, в dev код всегда 0000
+POST   /auth/refresh               публичный, ротация токена
+POST   /auth/logout                публичный, отзыв refresh
+GET    /auth/me    PATCH /auth/me
+
+GET    /boxes?lat&lng&radius&category&maxPrice&pickupBefore&limit&offset   публичный
+GET    /boxes/:id                                                          публичный
+
+POST   /orders                     { boxId, quantity } → бронь
+GET    /orders?active=true
+GET    /orders/:id
+POST   /orders/:id/cancel
+POST   /orders/:id/pay-dev         только в dev, заменится вебхуком ЮKassa
+
+POST   /merchants                  заявка на регистрацию → на модерацию
+GET    /merchants/:id              публичный
+GET    /merchants/me
+GET    /merchants/me/stats
+PATCH  /merchants/me/:id
+GET    /merchants/me/boxes         роль merchant
+POST   /merchants/me/boxes
+PATCH  /merchants/me/boxes/:id
+GET    /merchants/me/orders?pending=true
+POST   /merchants/me/orders/collect  { pickupCode }
+
+POST   /reviews                    только по полученному заказу, один раз
+GET    /reviews?merchantId=        публичный
+POST   /reviews/:id/reply          роль merchant
+
+GET    /favorites   POST /favorites   DELETE /favorites/:merchantId
+```
+
+Владелец нескольких точек передаёт `?merchantId=` в эндпоинты `/merchants/me/*`;
+без параметра берётся первое заведение пользователя.
+
+## Реализованные правила раздела 7
+
+| # | Правило | Где |
+|---|---|---|
+| 7.1 | `best_before > pickup_end` | `BoxesService.assertBoxRules` + CHECK в БД |
+| 7.2 | Транзакционное резервирование с `SELECT … FOR UPDATE`; бронь снимается через 10 минут без оплаты | `OrdersService.create`, `releaseUnpaidOrders` |
+| 7.3 | Cron каждые 5 минут переводит боксы в `expired` | `SchedulerService.expireBoxes` |
+| 7.4 | `total = price × quantity + service_fee`, комиссия и доля заведения | `calculateOrderAmounts` |
+| 7.5 | Код выдачи: 6 цифр, уникален по заведению за сутки, генерируется при оплате | `OrdersService.markPaid` |
+| 7.6 | Не забрали до `pickup_end` → `no_show`, деньги не возвращаются | `OrdersService.markNoShows` |
+| 7.7 | Бесплатная отмена не позже чем за 2 часа до `pickup_start` | `OrdersService.cancelByCustomer` |
+| 7.8 | `ST_DWithin` по радиусу, сортировка по расстоянию | `BoxesService.search` |
+| 7.9 | Пуши — этап 7 | — |
 
 ## Формат ошибок API
 
