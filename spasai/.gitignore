@@ -1,0 +1,12 @@
+node_modules/
+dist/
+coverage/
+*.log
+
+# Локальные секреты. .env.example и .env.docker коммитим — там нет секретов.
+.env
+.env.local
+.env.*.local
+
+# Prisma
+apps/api/src/generated/

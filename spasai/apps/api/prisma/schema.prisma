@@ -1,0 +1,314 @@
+// Схема БД проекта «Спасай» — раздел 3 ТЗ.
+//
+// Соглашения (раздел 10 ТЗ):
+//   * все денежные суммы — целые числа в КОПЕЙКАХ (Int), никаких float/Decimal;
+//   * все даты — timestamptz, хранятся в UTC;
+//   * в коде — camelCase, в БД — snake_case через @map/@@map.
+//
+// Геопоиск: координаты хранятся как lat/lng (Float). Индекс под PostGIS
+// ST_DWithin создаётся выражением в миграции — см. комментарий у модели Merchant.
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [postgis]
+}
+
+// ─────────────────────────────────────────────────────────────── enums ──
+
+enum UserRole {
+  customer
+  merchant
+  admin
+}
+
+enum MerchantStatus {
+  pending
+  approved
+  rejected
+  suspended
+}
+
+enum BoxStatus {
+  active
+  sold_out
+  expired
+  cancelled
+}
+
+enum OrderStatus {
+  pending_payment
+  paid
+  ready
+  collected
+  cancelled
+  refunded
+  no_show
+}
+
+enum PayoutStatus {
+  pending
+  paid
+}
+
+enum NotificationType {
+  order_paid
+  pickup_reminder
+  order_collected
+  order_cancelled
+  order_no_show
+  refund
+  favorite_new_box
+  merchant_approved
+  merchant_rejected
+  system
+}
+
+// ─────────────────────────────────────────────────────────────── models ──
+
+model User {
+  id        String   @id @default(uuid()) @db.Uuid
+  phone     String   @unique @db.VarChar(20)
+  name      String?  @db.VarChar(120)
+  email     String?  @db.VarChar(255)
+  avatarUrl String?  @map("avatar_url") @db.VarChar(1024)
+  role      UserRole @default(customer)
+  isBlocked Boolean  @default(false) @map("is_blocked")
+  fcmToken  String?  @map("fcm_token") @db.VarChar(512)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  merchants     Merchant[]
+  orders        Order[]
+  reviews       Review[]
+  favorites     Favorite[]
+  notifications Notification[]
+
+  @@index([role])
+  @@map("users")
+}
+
+/// Заведение. Геопоиск идёт по выражению
+/// ST_SetSRID(ST_MakePoint(lng, lat), 4326)::geography — под него в миграции
+/// создан GiST-индекс merchants_geo_idx, поэтому отдельная geometry-колонка
+/// не нужна и схема остаётся полностью описуемой в Prisma.
+model Merchant {
+  id             String         @id @default(uuid()) @db.Uuid
+  ownerUserId    String         @map("owner_user_id") @db.Uuid
+  title          String         @db.VarChar(200)
+  description    String?
+  category       String         @db.VarChar(64)
+  address        String         @db.VarChar(500)
+  lat            Float
+  lng            Float
+  phone          String         @db.VarChar(20)
+  logoUrl        String?        @map("logo_url") @db.VarChar(1024)
+  photos         String[]       @default([])
+  inn            String         @db.VarChar(12)
+  legalName      String         @map("legal_name") @db.VarChar(300)
+  /// Таймзона заведения (IANA), для конвертации UTC → локальное время.
+  timezone       String         @default("Europe/Moscow") @db.VarChar(64)
+  status         MerchantStatus @default(pending)
+  /// Причина отклонения заявки модератором.
+  rejectionReason String?       @map("rejection_reason")
+  /// Доля комиссии платформы, 0..1. Не деньги — здесь Decimal уместен.
+  commissionRate Decimal        @default(0.20) @map("commission_rate") @db.Decimal(4, 3)
+  ratingAvg      Decimal        @default(0) @map("rating_avg") @db.Decimal(3, 2)
+  ratingCount    Int            @default(0) @map("rating_count")
+  createdAt      DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  owner     User       @relation(fields: [ownerUserId], references: [id], onDelete: Restrict)
+  boxes     Box[]
+  orders    Order[]
+  reviews   Review[]
+  payouts   Payout[]
+  favorites Favorite[]
+
+  @@unique([inn])
+  @@index([ownerUserId])
+  @@index([status])
+  @@index([category])
+  @@map("merchants")
+}
+
+/// Товарное предложение («бокс»).
+/// Инвариант из раздела 7.1: best_before > pickup_end (проверяется и в БД
+/// через CHECK-констрейнт, и на уровне сервиса).
+model Box {
+  id             String    @id @default(uuid()) @db.Uuid
+  merchantId     String    @map("merchant_id") @db.Uuid
+  title          String    @db.VarChar(200)
+  description    String?
+  /// Цена до скидки, копейки.
+  originalPrice  Int       @map("original_price")
+  /// Цена продажи, копейки.
+  price          Int
+  quantityTotal  Int       @map("quantity_total")
+  quantityLeft   Int       @map("quantity_left")
+  /// Срок годности. Обязателен, валидируется на бэкенде.
+  bestBefore     DateTime  @map("best_before") @db.Timestamptz(6)
+  pickupStart    DateTime  @map("pickup_start") @db.Timestamptz(6)
+  pickupEnd      DateTime  @map("pickup_end") @db.Timestamptz(6)
+  photoUrl       String?   @map("photo_url") @db.VarChar(1024)
+  category       String    @db.VarChar(64)
+  allergens      String[]  @default([])
+  status         BoxStatus @default(active)
+  isRecurring    Boolean   @default(false) @map("is_recurring")
+  /// RRULE-подобное правило повторения, например «каждый будний день в 20:00».
+  recurrenceRule String?   @map("recurrence_rule") @db.VarChar(500)
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  merchant Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  orders   Order[]
+
+  @@index([merchantId])
+  @@index([status, pickupEnd])
+  @@index([category])
+  @@map("boxes")
+}
+
+/// Заказ. Денежная разбивка (раздел 7.4):
+///   total             = price * quantity + service_fee
+///   commission_amount = price * quantity * commission_rate
+///   заведению         = price * quantity - commission_amount
+model Order {
+  id               String      @id @default(uuid()) @db.Uuid
+  userId           String      @map("user_id") @db.Uuid
+  boxId            String      @map("box_id") @db.Uuid
+  merchantId       String      @map("merchant_id") @db.Uuid
+  quantity         Int
+  /// Цена одного бокса на момент заказа, копейки.
+  boxPrice         Int         @map("box_price")
+  /// Сервисный сбор платформы, копейки.
+  serviceFee       Int         @map("service_fee")
+  /// Итог к оплате покупателем, копейки.
+  total            Int
+  /// Комиссия платформы с заведения, копейки.
+  commissionAmount Int         @map("commission_amount")
+  status           OrderStatus @default(pending_payment)
+  /// Код выдачи, 6 цифр. Появляется после успешной оплаты.
+  pickupCode       String?     @map("pickup_code") @db.Char(6)
+  paymentId        String?     @map("payment_id") @db.VarChar(128)
+  paidAt           DateTime?   @map("paid_at") @db.Timestamptz(6)
+  collectedAt      DateTime?   @map("collected_at") @db.Timestamptz(6)
+  cancelledAt      DateTime?   @map("cancelled_at") @db.Timestamptz(6)
+  createdAt        DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime    @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Restrict)
+  box      Box      @relation(fields: [boxId], references: [id], onDelete: Restrict)
+  merchant Merchant @relation(fields: [merchantId], references: [id], onDelete: Restrict)
+  review   Review?
+
+  @@unique([paymentId])
+  @@index([userId, createdAt])
+  @@index([merchantId, status])
+  @@index([boxId])
+  @@index([status, createdAt])
+  @@map("orders")
+}
+
+model Review {
+  id         String   @id @default(uuid()) @db.Uuid
+  orderId    String   @unique @map("order_id") @db.Uuid
+  userId     String   @map("user_id") @db.Uuid
+  merchantId String   @map("merchant_id") @db.Uuid
+  rating     Int
+  comment    String?
+  /// Ответ заведения на отзыв.
+  reply      String?
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  order    Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  merchant Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+
+  @@index([merchantId, createdAt])
+  @@index([userId])
+  @@map("reviews")
+}
+
+/// Выплата заведению за период. Все суммы — копейки.
+model Payout {
+  id               String       @id @default(uuid()) @db.Uuid
+  merchantId       String       @map("merchant_id") @db.Uuid
+  periodStart      DateTime     @map("period_start") @db.Timestamptz(6)
+  periodEnd        DateTime     @map("period_end") @db.Timestamptz(6)
+  grossAmount      Int          @map("gross_amount")
+  commissionAmount Int          @map("commission_amount")
+  netAmount        Int          @map("net_amount")
+  status           PayoutStatus @default(pending)
+  paidAt           DateTime?    @map("paid_at") @db.Timestamptz(6)
+  createdAt        DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  merchant Merchant @relation(fields: [merchantId], references: [id], onDelete: Restrict)
+
+  @@unique([merchantId, periodStart, periodEnd])
+  @@index([status])
+  @@map("payouts")
+}
+
+model Favorite {
+  id         String   @id @default(uuid()) @db.Uuid
+  userId     String   @map("user_id") @db.Uuid
+  merchantId String   @map("merchant_id") @db.Uuid
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  merchant Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, merchantId])
+  @@index([merchantId])
+  @@map("favorites")
+}
+
+model Notification {
+  id          String           @id @default(uuid()) @db.Uuid
+  userId      String           @map("user_id") @db.Uuid
+  type        NotificationType
+  title       String           @db.VarChar(200)
+  body        String
+  payloadJson Json?            @map("payload_json")
+  isRead      Boolean          @default(false) @map("is_read")
+  createdAt   DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead, createdAt])
+  @@map("notifications")
+}
+
+/// Одноразовые SMS-коды для входа (раздел 2 этапа 2, таблица нужна уже сейчас,
+/// чтобы не плодить миграции). Rate limit — 1 код в минуту на номер.
+model PhoneVerification {
+  id        String    @id @default(uuid()) @db.Uuid
+  phone     String    @db.VarChar(20)
+  codeHash  String    @map("code_hash") @db.VarChar(128)
+  attempts  Int       @default(0)
+  expiresAt DateTime  @map("expires_at") @db.Timestamptz(6)
+  usedAt    DateTime? @map("used_at") @db.Timestamptz(6)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([phone, createdAt])
+  @@map("phone_verifications")
+}
+
+/// Глобальные настройки платформы (комиссия по умолчанию, сервисный сбор).
+/// Одна строка, id = 1.
+model PlatformSettings {
+  id                    Int      @id @default(1)
+  /// Комиссия по умолчанию для новых заведений, 0..1.
+  defaultCommissionRate Decimal  @default(0.20) @map("default_commission_rate") @db.Decimal(4, 3)
+  /// Сервисный сбор с заказа, копейки.
+  serviceFee            Int      @default(2900) @map("service_fee")
+  updatedAt             DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("platform_settings")
+}

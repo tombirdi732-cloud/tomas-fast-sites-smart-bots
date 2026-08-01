@@ -1,0 +1,83 @@
+services:
+  postgres:
+    image: postgis/postgis:16-3.4
+    container_name: spasai-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: spasai
+      POSTGRES_PASSWORD: spasai
+      POSTGRES_DB: spasai
+      # Все даты в БД хранятся в UTC (раздел 10 ТЗ).
+      TZ: UTC
+      PGTZ: UTC
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U spasai -d spasai']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: spasai-redis
+    restart: unless-stopped
+    command: ['redis-server', '--appendonly', 'yes']
+    ports:
+      - '6379:6379'
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # Локальная замена Yandex Object Storage (S3-совместимое хранилище).
+  minio:
+    image: minio/minio:latest
+    container_name: spasai-minio
+    restart: unless-stopped
+    command: ['server', '/data', '--console-address', ':9001']
+    environment:
+      MINIO_ROOT_USER: spasai
+      MINIO_ROOT_PASSWORD: spasai-secret
+    ports:
+      - '9000:9000'
+      - '9001:9001'
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ['CMD', 'mc', 'ready', 'local']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # API поднимается профилем: docker compose --profile api up -d
+  api:
+    profiles: ['api']
+    build:
+      context: ./apps/api
+      dockerfile: Dockerfile
+      target: development
+    container_name: spasai-api
+    restart: unless-stopped
+    env_file:
+      - ./apps/api/.env.docker
+    ports:
+      - '3000:3000'
+    volumes:
+      - ./apps/api/src:/app/src
+      - ./apps/api/prisma:/app/prisma
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  postgres-data:
+  redis-data:
+  minio-data:

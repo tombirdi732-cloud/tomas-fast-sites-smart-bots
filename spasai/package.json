@@ -1,0 +1,23 @@
+{
+  "name": "spasai",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Маркетплейс еды с истекающим сроком годности",
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "api": "npm run -w @spasai/api",
+    "api:dev": "npm run start:dev -w @spasai/api",
+    "api:build": "npm run build -w @spasai/api",
+    "api:test": "npm run test -w @spasai/api",
+    "db:up": "docker compose up -d postgres redis minio",
+    "db:down": "docker compose down",
+    "db:migrate": "npm run prisma:migrate -w @spasai/api",
+    "db:deploy": "npm run prisma:deploy -w @spasai/api",
+    "db:reset": "npm run prisma:reset -w @spasai/api"
+  },
+  "engines": {
+    "node": ">=20.11"
+  }
+}
