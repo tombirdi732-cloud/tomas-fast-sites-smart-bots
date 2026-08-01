@@ -82,7 +82,7 @@ export class AuthService {
 
     const code = this.sms.generateCode();
 
-    await this.prisma.phoneVerification.create({
+    const verification = await this.prisma.phoneVerification.create({
       data: {
         phone,
         codeHash: this.hash(code),
@@ -90,7 +90,23 @@ export class AuthService {
       },
     });
 
-    await this.sms.send(phone, code);
+    try {
+      await this.sms.send(phone, code);
+    } catch (error) {
+      // Провайдер отказал — снимаем запись, иначе минутный кулдаун съеден
+      // впустую и пользователь заперт без единого шанса повторить.
+      await this.prisma.phoneVerification.delete({ where: { id: verification.id } });
+
+      this.logger.error(
+        `Не удалось отправить код: ${error instanceof Error ? error.message : String(error)}`,
+      );
+
+      throw new ApiException(
+        HttpStatus.SERVICE_UNAVAILABLE,
+        AuthErrorCode.SMS_SEND_FAILED,
+        'Не удалось отправить SMS. Попробуйте ещё раз через минуту.',
+      );
+    }
 
     return { retryAfter: cooldown, ...(this.sms.isStub ? { devCode: code } : {}) };
   }

@@ -16,13 +16,17 @@ export const envSchema = z.object({
   CORS_ORIGINS: z.string().default('*'),
 
   /**
-   * В dev SMS не отправляются, код всегда 0000 (этап 2 ТЗ).
-   * В production флаг обязан быть false.
+   * Провайдер SMS. `stub` — код всегда 0000 и ничего не отправляется
+   * (этап 2 ТЗ); в production обязан быть настоящий провайдер.
    */
-  SMS_STUB: z
-    .enum(['true', 'false'])
-    .default('true')
-    .transform((value) => value === 'true'),
+  SMS_PROVIDER: z.enum(['stub', 'smsru', 'smsc']).default('stub'),
+  /** sms.ru: api_id из личного кабинета. */
+  SMS_API_ID: z.string().default(''),
+  /** smsc.ru: логин и пароль клиента. */
+  SMS_LOGIN: z.string().default(''),
+  SMS_PASSWORD: z.string().default(''),
+  /** Согласованное с оператором имя отправителя. Пусто — имя по умолчанию. */
+  SMS_SENDER: z.string().default(''),
 
   /** Подпись JWT. В production обязателен собственный секрет. */
   JWT_SECRET: z.string().min(16).default('dev-only-secret-change-me'),
@@ -64,8 +68,19 @@ export function validateEnv(raw: Record<string, unknown>): Env {
   }
 
   if (parsed.data.NODE_ENV === 'production') {
-    if (parsed.data.SMS_STUB) {
-      throw new Error('SMS_STUB=true недопустим при NODE_ENV=production');
+    if (parsed.data.SMS_PROVIDER === 'stub') {
+      throw new Error(
+        'SMS_PROVIDER=stub недопустим при NODE_ENV=production: вход по коду 0000 открыт всем',
+      );
+    }
+    if (parsed.data.SMS_PROVIDER === 'smsru' && !parsed.data.SMS_API_ID) {
+      throw new Error('SMS_PROVIDER=smsru требует SMS_API_ID');
+    }
+    if (
+      parsed.data.SMS_PROVIDER === 'smsc' &&
+      (!parsed.data.SMS_LOGIN || !parsed.data.SMS_PASSWORD)
+    ) {
+      throw new Error('SMS_PROVIDER=smsc требует SMS_LOGIN и SMS_PASSWORD');
     }
     if (parsed.data.JWT_SECRET.startsWith('dev-only')) {
       throw new Error('JWT_SECRET обязателен при NODE_ENV=production');

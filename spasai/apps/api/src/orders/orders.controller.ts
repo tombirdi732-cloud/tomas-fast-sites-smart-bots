@@ -101,7 +101,7 @@ export class OrdersController {
     @CurrentUser() user: AuthUser,
     @Param('id', ParseUUIDPipe) id: string,
   ): Promise<Order> {
-    if (!this.config.get('SMS_STUB', { infer: true })) {
+    if (this.config.get('SMS_PROVIDER', { infer: true }) !== 'stub') {
       throw ApiException.notFound('Эндпоинт доступен только в dev-режиме');
     }
     await this.orders.findOwn(user.id, id);

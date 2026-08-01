@@ -16,7 +16,7 @@ const ENV: Record<string, unknown> = {
   SMS_MAX_ATTEMPTS: 5,
   JWT_ACCESS_TTL: 900,
   JWT_REFRESH_TTL: 2_592_000,
-  SMS_STUB: true,
+  SMS_PROVIDER: 'stub',
 };
 
 function makeService(overrides: {
@@ -35,6 +35,7 @@ function makeService(overrides: {
       ),
       create: jest.fn(() => Promise.resolve({ id: 'v1' })),
       update: jest.fn(() => Promise.resolve({ id: 'v1' })),
+      delete: jest.fn(() => Promise.resolve({ id: 'v1' })),
     },
     user: {
       upsert: jest.fn(() =>

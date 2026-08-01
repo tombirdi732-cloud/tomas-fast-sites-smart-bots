@@ -9,6 +9,7 @@ export const AuthErrorCode = {
   CODE_ATTEMPTS_EXCEEDED: 'CODE_ATTEMPTS_EXCEEDED',
   REFRESH_INVALID: 'REFRESH_INVALID',
   USER_BLOCKED: 'USER_BLOCKED',
+  SMS_SEND_FAILED: 'SMS_SEND_FAILED',
 } as const;
 
 export const BoxErrorCode = {
