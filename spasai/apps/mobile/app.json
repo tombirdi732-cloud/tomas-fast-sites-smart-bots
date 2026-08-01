@@ -1,0 +1,39 @@
+{
+  "expo": {
+    "name": "Спасай",
+    "slug": "spasai",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "scheme": "spasai",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "splash": {
+      "backgroundColor": "#F6F5F1",
+      "resizeMode": "contain"
+    },
+    "android": {
+      "package": "ru.spasai.app",
+      "adaptiveIcon": { "backgroundColor": "#FFD400" },
+      "permissions": ["ACCESS_COARSE_LOCATION", "ACCESS_FINE_LOCATION"],
+      "edgeToEdgeEnabled": true
+    },
+    "ios": {
+      "bundleIdentifier": "ru.spasai.app",
+      "supportsTablet": false,
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Чтобы показать боксы рядом с вами"
+      }
+    },
+    "plugins": [
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Чтобы показать боксы рядом с вами"
+        }
+      ]
+    ],
+    "extra": {
+      "apiUrl": "http://10.0.2.2:3000/api"
+    }
+  }
+}
