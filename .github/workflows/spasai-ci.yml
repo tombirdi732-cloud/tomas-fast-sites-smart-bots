@@ -1,0 +1,100 @@
+name: Спасай — CI
+
+on:
+  push:
+    branches: ['**']
+    paths: ['spasai/**', '.github/workflows/spasai-ci.yml']
+  pull_request:
+    paths: ['spasai/**', '.github/workflows/spasai-ci.yml']
+
+defaults:
+  run:
+    working-directory: spasai
+
+jobs:
+  api:
+    name: API — линт, типы, тесты, миграции
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_USER: spasai
+          POSTGRES_PASSWORD: spasai
+          POSTGRES_DB: spasai
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U spasai -d spasai"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://spasai:spasai@localhost:5432/spasai?schema=public
+      REDIS_URL: redis://localhost:6379
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: spasai/package-lock.json
+
+      - run: npm ci
+
+      - run: npm run prisma:generate -w @spasai/api
+
+      # Миграции обязаны применяться на чистую базу — вместе с
+      # CHECK-констрейнтами и индексом PostGIS из init-миграции.
+      - run: npm run prisma:deploy -w @spasai/api
+
+      - run: npm run lint -w @spasai/api
+      - run: npm run typecheck -w @spasai/api
+      - run: npm run test -w @spasai/api
+      - run: npm run build -w @spasai/api
+
+      - name: Health-проверка собранного API
+        run: |
+          node apps/api/dist/main.js &
+          for _ in $(seq 1 30); do
+            curl -sf http://localhost:3000/api/health && break
+            sleep 1
+          done
+          curl -sf http://localhost:3000/api/health | grep -q '"status":"ok"'
+
+  web:
+    name: Панель заведения — линт, типы, сборка
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: spasai/package-lock.json
+
+      - run: npm ci
+      - run: npm run lint -w @spasai/web
+      - run: npm run typecheck -w @spasai/web
+      - run: npm run build -w @spasai/web
+
+  mobile:
+    name: Мобильное приложение — типы
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: spasai/package-lock.json
+
+      - run: npm ci
+      - run: npm run typecheck -w @spasai/mobile

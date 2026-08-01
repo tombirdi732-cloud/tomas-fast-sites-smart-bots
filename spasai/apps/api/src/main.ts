@@ -1,5 +1,11 @@
 import 'reflect-metadata';
 
+// Sentry инициализируется до всего остального — иначе не перехватит
+// ошибки на этапе поднятия приложения.
+import { initObservability } from './observability';
+
+const sentryEnabled = initObservability();
+
 import { Logger, ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
@@ -36,7 +42,10 @@ async function bootstrap(): Promise<void> {
   app.enableShutdownHooks();
 
   await app.listen(port, '0.0.0.0');
-  new Logger('Bootstrap').log(`API слушает http://localhost:${port}/${apiPrefix}`);
+
+  const logger = new Logger('Bootstrap');
+  logger.log(`API слушает http://localhost:${port}/${apiPrefix}`);
+  logger.log(sentryEnabled ? 'Sentry подключён' : 'Sentry выключен: SENTRY_DSN не задан');
 }
 
 void bootstrap();
