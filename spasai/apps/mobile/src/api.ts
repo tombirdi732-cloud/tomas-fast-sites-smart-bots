@@ -49,8 +49,36 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * Сколько ждём ответ. Без этого запрос к недоступному серверу висит,
+ * пока его не оборвёт система, — а на экране всё это время крутится
+ * бесконечная загрузка без единого объяснения.
+ */
+const TIMEOUT_MS = 12_000;
+
+/** Сервер не ответил: не дозвонились, оборвалось или вышло время. */
+export const NETWORK_ERROR = 'NETWORK_ERROR';
+
 let accessToken: string | null = null;
 let refreshToken: string | null = null;
+
+/** fetch с таймаутом: сетевые сбои приводятся к понятной ApiError. */
+async function fetchWithTimeout(url: string, init: RequestInit): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } catch {
+    throw new ApiError(
+      0,
+      NETWORK_ERROR,
+      `Сервер ${BASE} не отвечает. Проверьте адрес — ссылка «Сервер» на экране входа.`,
+    );
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 export async function loadTokens(): Promise<boolean> {
   const pairs = await AsyncStorage.multiGet([ACCESS_KEY, REFRESH_KEY]);
@@ -81,7 +109,7 @@ export function getRefreshToken(): string | null {
 async function tryRefresh(): Promise<boolean> {
   if (!refreshToken) return false;
 
-  const response = await fetch(`${BASE}/auth/refresh`, {
+  const response = await fetchWithTimeout(`${BASE}/auth/refresh`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ refreshToken }),
@@ -108,7 +136,7 @@ export async function api<T>(
     if (body !== undefined) headers['Content-Type'] = 'application/json';
     if (auth && accessToken) headers.Authorization = `Bearer ${accessToken}`;
 
-    return fetch(`${BASE}${path}`, {
+    return fetchWithTimeout(`${BASE}${path}`, {
       method,
       headers,
       ...(body !== undefined ? { body: JSON.stringify(body) } : {}),

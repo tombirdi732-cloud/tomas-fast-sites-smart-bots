@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ApiError, api, getApiUrl, saveTokens, setApiUrl } from '../api';
 import { Button, Notice } from '../components';
+import { loginAsDemo } from '../demoLogin';
 import { useSession } from '../session';
 import { useTheme } from '../theme';
 
@@ -49,6 +50,24 @@ export function LoginScreen() {
       );
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Не удалось отправить код');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /** Вход без номера и кода — только против сервера в dev-режиме. */
+  async function demo() {
+    setError(null);
+    setBusy(true);
+    try {
+      await loginAsDemo();
+      await reload();
+    } catch (err) {
+      setError(
+        err instanceof ApiError
+          ? err.message
+          : `Сервер ${getApiUrl()} недоступен. Проверьте адрес — кнопка «Сервер» ниже.`,
+      );
     } finally {
       setBusy(false);
     }
@@ -108,6 +127,16 @@ export function LoginScreen() {
               />
               <Text style={{ color: theme.inkFaint, fontSize: 13 }}>
                 Код можно запросить не чаще раза в минуту.
+              </Text>
+
+              <Button
+                title="Войти без кода — посмотреть приложение"
+                variant="ghost"
+                onPress={() => void demo()}
+                loading={busy}
+              />
+              <Text style={{ color: theme.inkFaint, fontSize: 13 }}>
+                Временный вход, пока не подключена рассылка SMS. На боевом сервере не работает.
               </Text>
 
               <Pressable onPress={() => setServerOpen((open) => !open)} hitSlop={8}>

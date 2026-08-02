@@ -113,7 +113,11 @@ services:
       start_period: 40s
 
   nginx:
-    image: nginx:1.27-alpine
+    # Панель собирается внутри образа: ставить Node на сервер не нужно.
+    build:
+      context: ..
+      dockerfile: apps/web/Dockerfile
+      target: production
     restart: always
     logging: *logging
     ports:
@@ -121,8 +125,6 @@ services:
       - '443:443'
     volumes:
       - ./nginx.conf:/etc/nginx/templates/default.conf.template:ro
-      # Собранная панель заведения: npm run web:build → apps/web/dist
-      - ../apps/web/dist:/var/www/spasai:ro
       - certbot-www:/var/www/certbot
       - certbot-conf:/etc/letsencrypt:ro
     environment:

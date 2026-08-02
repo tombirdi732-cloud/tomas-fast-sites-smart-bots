@@ -10,6 +10,7 @@ export const AuthErrorCode = {
   REFRESH_INVALID: 'REFRESH_INVALID',
   USER_BLOCKED: 'USER_BLOCKED',
   SMS_SEND_FAILED: 'SMS_SEND_FAILED',
+  DEMO_LOGIN_DISABLED: 'DEMO_LOGIN_DISABLED',
 } as const;
 
 export const BoxErrorCode = {

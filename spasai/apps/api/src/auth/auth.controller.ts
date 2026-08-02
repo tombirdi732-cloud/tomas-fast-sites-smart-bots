@@ -42,6 +42,19 @@ export class AuthController {
     return { ...tokens, user: AuthController.toMe(user) };
   }
 
+  /**
+   * Демо-вход без номера и кода. Работает только при `DEMO_LOGIN=true`
+   * и заводит новый пустой аккаунт — чужой им не открыть.
+   */
+  @Public()
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @Post('demo')
+  @HttpCode(HttpStatus.OK)
+  async demo(): Promise<TokenPair & { user: MeResponse }> {
+    const { user, ...tokens } = await this.auth.demoLogin();
+    return { ...tokens, user: AuthController.toMe(user) };
+  }
+
   @Public()
   @Post('refresh')
   @HttpCode(HttpStatus.OK)

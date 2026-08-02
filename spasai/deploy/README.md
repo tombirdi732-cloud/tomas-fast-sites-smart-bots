@@ -41,19 +41,10 @@ PostGIS, на котором держится весь геопоиск.
 
 Остаётся около 800 МБ памяти и 4–5 ГБ диска. Отсюда четыре правила.
 
-**1. Не собирайте проект на сервере.** `npm ci` в корне монорепозитория
-тянет и мобильное приложение — это больше 1 ГБ памяти и почти 2 ГБ диска,
-на 2 ГБ RAM сборка упадёт с OOM. Собирайте панель у себя и копируйте
-готовую статику:
-
-```bash
-# на своей машине
-npm ci && npm run web:build
-rsync -az apps/web/dist/ root@СЕРВЕР:/opt/spasai/spasai/apps/web/dist/
-```
-
-Образ API собирается многоступенчатым Dockerfile — его можно собрать на
-сервере, но лучше тоже собрать в CI и пушить в реестр.
+**1. Не ставьте Node на сервер.** `npm ci` в корне монорепозитория тянет
+и мобильное приложение — больше 1 ГБ памяти, на 2 ГБ это OOM. Поэтому
+и API, и панель собираются внутри Docker: каждый образ ставит только свои
+зависимости. От вас на сервере нужен один Docker.
 
 **2. Swap — 2 ГБ, не больше.** Диска всего 10 ГБ, файл на 4 ГБ съест почти
 половину свободного места.
@@ -101,7 +92,27 @@ CRON
 Направьте A-запись домена на IP сервера и дождитесь, пока она разойдётся
 (`dig +short spasai.ru`).
 
-## Первый запуск
+## Первый запуск: одной командой
+
+На чистом Ubuntu 24.04, от root:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/tombirdi732-cloud/tomas-fast-sites-smart-bots/claude/hello-create-hpsvnj/spasai/deploy/bootstrap.sh \
+  | bash -s -- spasai.ru you@example.com
+```
+
+Домен и почта для сертификата — аргументы. Скрипт проверяет, что A-запись
+уже ведёт на этот сервер, добавляет swap, ставит Docker, закрывает файрвол,
+забирает код, генерирует секреты, выпускает сертификат, собирает и
+запускает всё и ставит задачи по расписанию. Повторный запуск безопасен:
+сделанное пропускается.
+
+Панель заведения собирается **внутри образа** (`apps/web/Dockerfile`) —
+Node на сервере не нужен, и сборка не упирается в 2 ГБ памяти.
+
+Ниже — то же самое по шагам, если хочется контролировать каждый.
+
+## Первый запуск вручную
 
 ```bash
 git clone <репозиторий> /opt/spasai && cd /opt/spasai/spasai
@@ -109,10 +120,6 @@ git clone <репозиторий> /opt/spasai && cd /opt/spasai/spasai
 cp deploy/.env.example deploy/.env
 # заполните секреты: openssl rand -base64 48
 nano deploy/.env
-
-# Панель заведения — статика, её собирает Vite.
-# На сервере с 2 ГБ RAM соберите её у себя и скопируйте dist (см. выше).
-npm ci && npm run web:build
 
 # Сертификат: сначала поднимаем nginx на 80, затем выпускаем
 docker compose -f deploy/docker-compose.prod.yml --env-file deploy/.env up -d nginx
@@ -141,8 +148,7 @@ docker compose -f deploy/docker-compose.prod.yml --env-file deploy/.env \
 
 ```bash
 cd /opt/spasai && git pull
-cd spasai && npm ci && npm run web:build
-docker compose -f deploy/docker-compose.prod.yml --env-file deploy/.env up -d --build api nginx
+cd spasai && docker compose -f deploy/docker-compose.prod.yml --env-file deploy/.env up -d --build api nginx
 ```
 
 ## Регламент
@@ -177,6 +183,14 @@ docker compose -f deploy/docker-compose.prod.yml --env-file deploy/.env up -d --
 | Пуши | Firebase → сервисный аккаунт | `FCM_PROJECT_ID`, `FCM_CLIENT_EMAIL`, `FCM_PRIVATE_KEY` |
 | Карты | кабинет Яндекс.Карт | ключ MapKit для мобильного приложения |
 | Sentry | sentry.io | `SENTRY_DSN` |
+
+**Пока SMS не подключены.** Сервер стартует и без ключей провайдера, но
+вход по номеру работать не будет: код просто некому отправить. На это время
+в `.env` стоит `DEMO_LOGIN=true` — в приложении появляется кнопка «Войти без
+кода», которая заводит новый пустой аккаунт в служебном диапазоне номеров.
+Чужой аккаунт ей не открыть, но завести себе может кто угодно, поэтому
+выключайте (`DEMO_LOGIN=false`), как только заработает рассылка. Если и SMS
+не настроены, и демо-вход выключен, сервер не стартует: войти было бы некому.
 
 Без ключей ЮKassa приём платежей выключен, без ключей FCM уведомления
 только пишутся в базу. `SMS_PROVIDER=stub` в production запрещён — иначе

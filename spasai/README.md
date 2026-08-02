@@ -148,6 +148,7 @@ ORDER BY distance_m;
 ```
 POST   /auth/request-code          публичный, 1 код в минуту на номер
 POST   /auth/verify-code           публичный, при SMS_PROVIDER=stub код 0000
+POST   /auth/demo                  публичный, вход без номера при DEMO_LOGIN=true
 POST   /auth/refresh               публичный, ротация токена
 POST   /auth/logout                публичный, отзыв refresh
 GET    /auth/me    PATCH /auth/me

@@ -29,7 +29,7 @@ describe('validateEnv', () => {
     expect(() => validateEnv({ ...base, NODE_ENV: 'production' })).toThrow(/SMS_PROVIDER/);
   });
 
-  it('требует ключ провайдера в production', () => {
+  it('требует ключ провайдера в production, если демо-вход выключен', () => {
     expect(() =>
       validateEnv({ ...base, NODE_ENV: 'production', SMS_PROVIDER: 'smsru' }),
     ).toThrow(/SMS_API_ID/);
@@ -37,6 +37,26 @@ describe('validateEnv', () => {
     expect(() =>
       validateEnv({ ...base, NODE_ENV: 'production', SMS_PROVIDER: 'smsc', SMS_LOGIN: 'x' }),
     ).toThrow(/SMS_LOGIN и SMS_PASSWORD/);
+  });
+
+  it('пускает production без ключей SMS, пока включён демо-вход', () => {
+    // Имя отправителя операторы согласуют днями — сервер не должен
+    // отказываться стартовать всё это время.
+    const env = validateEnv({
+      ...base,
+      NODE_ENV: 'production',
+      SMS_PROVIDER: 'smsru',
+      DEMO_LOGIN: 'true',
+      JWT_SECRET: 'prod-jwt-secret-0123456789',
+      AUTH_HASH_SECRET: 'prod-hash-secret-0123456789',
+    });
+    expect(env.DEMO_LOGIN).toBe(true);
+  });
+
+  it('всё равно запрещает заглушку в production, даже с демо-входом', () => {
+    expect(() =>
+      validateEnv({ ...base, NODE_ENV: 'production', SMS_PROVIDER: 'stub', DEMO_LOGIN: 'true' }),
+    ).toThrow(/SMS_PROVIDER/);
   });
 
   it('разрешает production при заданных секретах', () => {

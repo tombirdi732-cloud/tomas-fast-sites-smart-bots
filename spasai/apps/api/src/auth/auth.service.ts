@@ -1,4 +1,4 @@
-import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
+import { createHmac, randomBytes, randomInt, timingSafeEqual } from 'node:crypto';
 
 import { HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -169,6 +169,37 @@ export class AuthService {
 
     const tokens = await this.issueTokens(user);
     this.logger.log(`Вход выполнен: ${phone} (${user.role})`);
+    return { ...tokens, user };
+  }
+
+  /**
+   * Демо-вход: аккаунт без номера и кода, чтобы показать приложение,
+   * пока не подключена рассылка SMS.
+   *
+   * Намеренно не трогает обычный вход. Номер выдаёт сервер из служебного
+   * диапазона, поэтому попасть этим ходом в чужой аккаунт нельзя — можно
+   * только завести себе пустой. Включается флагом `DEMO_LOGIN`, в боевом
+   * режиме его положено выключить, как только заработают SMS.
+   */
+  async demoLogin(): Promise<TokenPair & { user: User }> {
+    if (!this.config.get('DEMO_LOGIN', { infer: true })) {
+      throw new ApiException(
+        HttpStatus.FORBIDDEN,
+        AuthErrorCode.DEMO_LOGIN_DISABLED,
+        'Демо-вход выключен. Войдите по номеру телефона.',
+      );
+    }
+
+    // Служебный диапазон: настоящие номера сюда не попадают, потому что
+    // обычный вход требует код из SMS, а его на такой номер никто не шлёт.
+    const phone = `+7900${randomInt(1_000_000, 10_000_000)}`;
+
+    const user = await this.prisma.user.create({
+      data: { phone, name: 'Демо', role: UserRole.customer },
+    });
+
+    const tokens = await this.issueTokens(user);
+    this.logger.log(`Демо-вход: заведён аккаунт ${phone}`);
     return { ...tokens, user };
   }
 

@@ -28,6 +28,17 @@ export const envSchema = z.object({
   /** Согласованное с оператором имя отправителя. Пусто — имя по умолчанию. */
   SMS_SENDER: z.string().default(''),
 
+  /**
+   * Демо-вход без номера и кода (`POST /auth/demo`). Нужен, пока не
+   * подключена рассылка SMS: иначе в приложение не попасть вообще.
+   * Заводит только новый пустой аккаунт в служебном диапазоне номеров —
+   * чужой аккаунт им не открыть. Выключайте, как только заработают SMS.
+   */
+  DEMO_LOGIN: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((value) => value === 'true'),
+
   /** Подпись JWT. В production обязателен собственный секрет. */
   JWT_SECRET: z.string().min(16).default('dev-only-secret-change-me'),
   /** Время жизни access-токена, секунды. */
@@ -85,14 +96,38 @@ export function validateEnv(raw: Record<string, unknown>): Env {
         'SMS_PROVIDER=stub недопустим при NODE_ENV=production: вход по коду 0000 открыт всем',
       );
     }
-    if (parsed.data.SMS_PROVIDER === 'smsru' && !parsed.data.SMS_API_ID) {
-      throw new Error('SMS_PROVIDER=smsru требует SMS_API_ID');
+    /*
+     * Ключи провайдера могут появиться позже сервера: согласование имени
+     * отправителя у операторов занимает дни. Пока их нет, вход возможен
+     * только демо-кнопкой — об этом громко предупреждаем, но старт не рвём.
+     * А вот если и SMS не настроены, и демо-вход выключен, войти не сможет
+     * никто: это уже ошибка конфигурации, и лучше упасть сразу.
+     */
+    const smsConfigured =
+      parsed.data.SMS_PROVIDER === 'smsru'
+        ? Boolean(parsed.data.SMS_API_ID)
+        : Boolean(parsed.data.SMS_LOGIN && parsed.data.SMS_PASSWORD);
+
+    if (!smsConfigured) {
+      const missing =
+        parsed.data.SMS_PROVIDER === 'smsru' ? 'SMS_API_ID' : 'SMS_LOGIN и SMS_PASSWORD';
+
+      if (!parsed.data.DEMO_LOGIN) {
+        throw new Error(
+          `SMS_PROVIDER=${parsed.data.SMS_PROVIDER} требует ${missing}. ` +
+            'Либо заполните их, либо включите DEMO_LOGIN=true — иначе войти не сможет никто.',
+        );
+      }
+
+      console.warn(
+        `⚠ ${missing} не заданы: SMS не отправляются, вход возможен только демо-кнопкой.`,
+      );
     }
-    if (
-      parsed.data.SMS_PROVIDER === 'smsc' &&
-      (!parsed.data.SMS_LOGIN || !parsed.data.SMS_PASSWORD)
-    ) {
-      throw new Error('SMS_PROVIDER=smsc требует SMS_LOGIN и SMS_PASSWORD');
+
+    if (parsed.data.DEMO_LOGIN) {
+      console.warn(
+        '⚠ DEMO_LOGIN=true: любой может завести демо-аккаунт. Выключите, когда заработают SMS.',
+      );
     }
     if (parsed.data.JWT_SECRET.startsWith('dev-only')) {
       throw new Error('JWT_SECRET обязателен при NODE_ENV=production');

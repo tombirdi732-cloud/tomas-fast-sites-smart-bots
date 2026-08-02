@@ -41,7 +41,8 @@
         {
           "android": {
             "usesCleartextTraffic": true,
-            "minSdkVersion": 26
+            "minSdkVersion": 26,
+            "useLegacyPackaging": true
           }
         }
       ],
