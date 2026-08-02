@@ -152,15 +152,41 @@ fi
 COMPOSE="docker compose -f deploy/docker-compose.prod.yml --env-file deploy/.env"
 
 # ─── 7. Сертификат ──────────────────────────────────────────────────────────
-if ! docker volume inspect deploy_certbot-conf >/dev/null 2>&1 ||
-   ! $COMPOSE run --rm --entrypoint sh certbot -c "test -d /etc/letsencrypt/live/$DOMAIN" 2>/dev/null; then
+have_cert() {
+  $COMPOSE run --rm --entrypoint sh certbot \
+    -c "test -f /etc/letsencrypt/live/$DOMAIN/fullchain.pem" 2>/dev/null
+}
+
+if ! have_cert; then
   say "Выпускаем сертификат Let's Encrypt"
-  # nginx нужен на 80 порту, чтобы Let's Encrypt проверил домен.
+
+  # Пока сертификата нет, nginx поднимается с временным конфигом только
+  # на 80 порту — иначе он не стартует и проверку домена проходить нечему.
   $COMPOSE up -d --build nginx
-  sleep 5
+
+  # Ждём, пока порт 80 реально начнёт отвечать: certbot отваливается
+  # с «Connection refused», если пойти к нему раньше времени.
+  say "Ждём, пока nginx начнёт отвечать на 80 порту"
+  for attempt in $(seq 1 30); do
+    if curl -fsS -o /dev/null "http://$DOMAIN/.well-known/acme-challenge/ping" ||
+       curl -fsS -o /dev/null "http://127.0.0.1/"; then
+      break
+    fi
+    if [[ $attempt -eq 30 ]]; then
+      echo "nginx так и не открыл 80 порт. Логи:" >&2
+      $COMPOSE logs --tail 40 nginx >&2
+      exit 1
+    fi
+    sleep 2
+  done
+
   $COMPOSE run --rm certbot certonly \
     --webroot -w /var/www/certbot -d "$DOMAIN" \
     --agree-tos -m "$EMAIL" --no-eff-email --non-interactive
+
+  # Сертификат появился — перезапускаем, чтобы подхватился конфиг с HTTPS.
+  say "Переключаем nginx на HTTPS"
+  $COMPOSE restart nginx
 fi
 
 # ─── 8. Запуск ──────────────────────────────────────────────────────────────

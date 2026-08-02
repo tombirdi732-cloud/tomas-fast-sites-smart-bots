@@ -124,11 +124,28 @@ services:
       - '80:80'
       - '443:443'
     volumes:
-      - ./nginx.conf:/etc/nginx/templates/default.conf.template:ro
+      # Оба конфига лежат рядом, нужный выбирается на старте — см. command.
+      - ./nginx.conf:/etc/nginx/variants/https.conf:ro
+      - ./nginx-http.conf:/etc/nginx/variants/http.conf:ro
       - certbot-www:/var/www/certbot
       - certbot-conf:/etc/letsencrypt:ro
     environment:
       DOMAIN: ${DOMAIN}
+    # Без сертификата боевой конфиг не даст nginx стартовать, а пока nginx
+    # не слушает 80 — Let's Encrypt не проверит домен. Поэтому до выпуска
+    # поднимаемся с временным конфигом, после перезапуска — с боевым.
+    command:
+      - sh
+      - -c
+      - |
+        mkdir -p /etc/nginx/templates
+        if [ -f "/etc/letsencrypt/live/$${DOMAIN}/fullchain.pem" ]; then
+          cp /etc/nginx/variants/https.conf /etc/nginx/templates/default.conf.template
+        else
+          echo "Сертификата для $${DOMAIN} ещё нет — поднимаемся только на 80 порту"
+          cp /etc/nginx/variants/http.conf /etc/nginx/templates/default.conf.template
+        fi
+        exec /docker-entrypoint.sh nginx -g 'daemon off;'
     depends_on:
       - api
 
