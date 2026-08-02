@@ -13,7 +13,8 @@ export const Roles = (...roles: UserRole[]) => SetMetadata(ROLES_KEY, roles);
 export interface AuthUser {
   id: string;
   role: UserRole;
-  phone: string;
+  /** У пришедших из Telegram телефона нет. */
+  phone: string | null;
 }
 
 /** Достаёт пользователя, положенного в запрос JwtAuthGuard'ом. */

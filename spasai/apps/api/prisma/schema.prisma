@@ -72,16 +72,19 @@ enum NotificationType {
 // ─────────────────────────────────────────────────────────────── models ──
 
 model User {
-  id        String   @id @default(uuid()) @db.Uuid
-  phone     String   @unique @db.VarChar(20)
-  name      String?  @db.VarChar(120)
-  email     String?  @db.VarChar(255)
-  avatarUrl String?  @map("avatar_url") @db.VarChar(1024)
-  role      UserRole @default(customer)
-  isBlocked Boolean  @default(false) @map("is_blocked")
-  fcmToken  String?  @map("fcm_token") @db.VarChar(512)
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  id         String   @id @default(uuid()) @db.Uuid
+  /// Телефон есть не у всех: вход через Telegram обходится без него.
+  phone      String?  @unique @db.VarChar(20)
+  /// id пользователя в Telegram — второй способ войти, без SMS и без номера.
+  telegramId String?  @unique @map("telegram_id") @db.VarChar(32)
+  name       String?  @db.VarChar(120)
+  email      String?  @db.VarChar(255)
+  avatarUrl  String?  @map("avatar_url") @db.VarChar(1024)
+  role       UserRole @default(customer)
+  isBlocked  Boolean  @default(false) @map("is_blocked")
+  fcmToken   String?  @map("fcm_token") @db.VarChar(512)
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   merchants     Merchant[]
   orders        Order[]
@@ -95,40 +98,60 @@ model User {
   @@map("users")
 }
 
+/// Начатый вход через Telegram. Приложение открывает бота со ссылкой
+/// вида t.me/bot?start=<nonce>, бот присылает этот nonce обратно вебхуком,
+/// и запись становится подтверждённой — тогда приложение забирает токены.
+model TelegramLogin {
+  id          String    @id @default(uuid()) @db.Uuid
+  /// Одноразовый код в ссылке. Только он связывает устройство и Telegram.
+  nonce       String    @unique @db.VarChar(64)
+  telegramId  String?   @map("telegram_id") @db.VarChar(32)
+  username    String?   @db.VarChar(64)
+  firstName   String?   @map("first_name") @db.VarChar(120)
+  confirmedAt DateTime? @map("confirmed_at") @db.Timestamptz(6)
+  /// Токены забирают ровно один раз — повторный запрос ничего не вернёт.
+  usedAt      DateTime? @map("used_at") @db.Timestamptz(6)
+  expiresAt   DateTime  @map("expires_at") @db.Timestamptz(6)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([expiresAt])
+  @@map("telegram_logins")
+}
+
 /// Заведение. Геопоиск идёт по выражению
 /// ST_SetSRID(ST_MakePoint(lng, lat), 4326)::geography — под него в миграции
 /// создан GiST-индекс merchants_geo_idx, поэтому отдельная geometry-колонка
 /// не нужна и схема остаётся полностью описуемой в Prisma.
 model Merchant {
-  id             String         @id @default(uuid()) @db.Uuid
-  ownerUserId    String         @map("owner_user_id") @db.Uuid
-  title          String         @db.VarChar(200)
-  description    String?
-  category       String         @db.VarChar(64)
-  address        String         @db.VarChar(500)
-  lat            Float
-  lng            Float
-  phone          String         @db.VarChar(20)
-  logoUrl        String?        @map("logo_url") @db.VarChar(1024)
-  photos         String[]       @default([])
-  inn            String         @db.VarChar(12)
-  legalName      String         @map("legal_name") @db.VarChar(300)
+  id              String         @id @default(uuid()) @db.Uuid
+  ownerUserId     String         @map("owner_user_id") @db.Uuid
+  title           String         @db.VarChar(200)
+  description     String?
+  category        String         @db.VarChar(64)
+  address         String         @db.VarChar(500)
+  lat             Float
+  lng             Float
+  phone           String         @db.VarChar(20)
+  logoUrl         String?        @map("logo_url") @db.VarChar(1024)
+  photos          String[]       @default([])
+  inn             String         @db.VarChar(12)
+  legalName       String         @map("legal_name") @db.VarChar(300)
   /// Таймзона заведения (IANA), для конвертации UTC → локальное время.
-  timezone       String         @default("Europe/Moscow") @db.VarChar(64)
-  status         MerchantStatus @default(pending)
+  timezone        String         @default("Europe/Moscow") @db.VarChar(64)
+  status          MerchantStatus @default(pending)
   /// Причина отклонения заявки модератором.
-  rejectionReason String?       @map("rejection_reason")
+  rejectionReason String?        @map("rejection_reason")
   /// Результат автопроверки ИНН по реестру ФНС на момент подачи заявки.
   /// Подсказка модератору, а не основание для автоматического одобрения.
   verification    Json?
   /// Доля комиссии платформы, 0..1. Не деньги — здесь Decimal уместен.
-  commissionRate Decimal        @default(0.20) @map("commission_rate") @db.Decimal(4, 3)
-  ratingAvg      Decimal        @default(0) @map("rating_avg") @db.Decimal(3, 2)
-  ratingCount    Int            @default(0) @map("rating_count")
-  createdAt      DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt      DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
+  commissionRate  Decimal        @default(0.20) @map("commission_rate") @db.Decimal(4, 3)
+  ratingAvg       Decimal        @default(0) @map("rating_avg") @db.Decimal(3, 2)
+  ratingCount     Int            @default(0) @map("rating_count")
+  createdAt       DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  owner     User       @relation(fields: [ownerUserId], references: [id], onDelete: Restrict)
+  owner     User             @relation(fields: [ownerUserId], references: [id], onDelete: Restrict)
   boxes     Box[]
   orders    Order[]
   reviews   Review[]

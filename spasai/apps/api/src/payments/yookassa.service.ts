@@ -93,9 +93,19 @@ export class YookassaService {
    */
   async createPayment(
     order: Order,
-    context: { boxTitle: string; customerPhone: string },
+    context: { boxTitle: string; customerPhone: string | null },
   ): Promise<CreatedPayment> {
     const returnUrl = this.config.get('YOOKASSA_RETURN_URL', { infer: true });
+
+    // В чеке по 54-ФЗ обязателен контакт покупателя. У пришедших через
+    // Telegram телефона нет — просим добавить его в профиле, иначе ФНС
+    // не примет чек, а покупатель не получит подтверждение оплаты.
+    if (!context.customerPhone) {
+      throw ApiException.badRequest(
+        'CONTACT_REQUIRED',
+        'Для оплаты онлайн нужен телефон: чек по 54-ФЗ без контакта не выдать. Укажите номер в профиле.',
+      );
+    }
 
     const items: unknown[] = [
       {

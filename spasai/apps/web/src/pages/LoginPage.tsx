@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 
 import { ApiError, api, tokens } from '../lib/api';
 import { Logo } from '../components/Logo';
@@ -14,6 +14,14 @@ interface VerifyResponse {
   refreshToken: string;
 }
 
+interface TelegramStart {
+  nonce: string;
+  url: string;
+  expiresIn: number;
+}
+
+type TelegramPoll = { status: 'pending' } | ({ status: 'ok' } & VerifyResponse);
+
 /** Вход по номеру телефона и SMS-коду. В dev код всегда 0000. */
 export function LoginPage() {
   const { reload } = useSession();
@@ -24,6 +32,8 @@ export function LoginPage() {
   const [hint, setHint] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [waitingTelegram, setWaitingTelegram] = useState(false);
+  const cancelTelegram = useRef(false);
 
   async function requestCode(event: React.FormEvent) {
     event.preventDefault();
@@ -44,6 +54,50 @@ export function LoginPage() {
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Не удалось отправить код');
     } finally {
+      setBusy(false);
+    }
+  }
+
+  /**
+   * Вход через Telegram: открываем бота в новой вкладке и ждём, пока
+   * там нажмут «Старт». Бесплатная замена SMS.
+   */
+  async function telegram() {
+    setError(null);
+    setBusy(true);
+    try {
+      const start = await api<TelegramStart>('/auth/telegram/start', {
+        method: 'POST',
+        auth: false,
+      });
+      window.open(start.url, '_blank', 'noopener');
+
+      cancelTelegram.current = false;
+      setWaitingTelegram(true);
+
+      const deadline = Date.now() + start.expiresIn * 1000;
+      while (Date.now() < deadline && !cancelTelegram.current) {
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+        if (cancelTelegram.current) break;
+
+        const result = await api<TelegramPoll>('/auth/telegram/poll', {
+          method: 'POST',
+          body: { nonce: start.nonce },
+          auth: false,
+        });
+
+        if (result.status === 'ok') {
+          tokens.save(result.accessToken, result.refreshToken);
+          await reload();
+          return;
+        }
+      }
+
+      if (!cancelTelegram.current) setError('Время на вход истекло. Попробуйте ещё раз.');
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Не удалось войти через Telegram');
+    } finally {
+      setWaitingTelegram(false);
       setBusy(false);
     }
   }
@@ -98,6 +152,32 @@ export function LoginPage() {
 
         {step === 'phone' ? (
           <form className="form card" onSubmit={requestCode}>
+            {waitingTelegram ? (
+              <>
+                <div className="alert alert--ok">
+                  Открыли Telegram. Нажмите там «Старт» — вход произойдёт сам.
+                </div>
+                <button
+                  className="btn btn--ghost"
+                  type="button"
+                  onClick={() => {
+                    cancelTelegram.current = true;
+                    setWaitingTelegram(false);
+                  }}
+                >
+                  Отмена
+                </button>
+              </>
+            ) : (
+              <button className="btn" type="button" onClick={() => void telegram()} disabled={busy}>
+                Войти через Telegram
+              </button>
+            )}
+
+            <p className="muted" style={{ margin: 0, textAlign: 'center', fontSize: '0.85rem' }}>
+              или по номеру телефона
+            </p>
+
             <label className="field">
               <span>Телефон</span>
               <input
@@ -110,7 +190,7 @@ export function LoginPage() {
                 required
               />
             </label>
-            <button className="btn" type="submit" disabled={busy || phone.length < 10}>
+            <button className="btn btn--ghost" type="submit" disabled={busy || phone.length < 10}>
               {busy ? 'Отправляем…' : 'Получить код'}
             </button>
             <p className="muted" style={{ margin: 0, fontSize: '0.85rem' }}>

@@ -143,6 +143,8 @@ if [[ ! -f deploy/.env ]]; then
   # вход в приложение — через демо-кнопку. Оба флага снимаются позже.
   set_env PAYMENTS_MODE on_pickup
   set_env DEMO_LOGIN true
+  # Адрес для вебхука Telegram: без него бот не узнает про нажатие «Старт».
+  set_env PUBLIC_API_URL "https://$DOMAIN/api"
   # Провайдер SMS нужен уже на старте: боевой режим не пускает заглушку.
   set_env SMS_PROVIDER smsru
   chmod 600 deploy/.env

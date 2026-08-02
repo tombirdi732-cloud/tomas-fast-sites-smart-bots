@@ -6,6 +6,8 @@ import type { Env } from '../config/env';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { SmsService } from './sms.service';
+import { TelegramWebhookController } from './telegram.controller';
+import { TelegramService } from './telegram.service';
 
 @Global()
 @Module({
@@ -18,8 +20,8 @@ import { SmsService } from './sms.service';
       }),
     }),
   ],
-  controllers: [AuthController],
-  providers: [AuthService, SmsService],
-  exports: [AuthService, JwtModule],
+  controllers: [AuthController, TelegramWebhookController],
+  providers: [AuthService, SmsService, TelegramService],
+  exports: [AuthService, TelegramService, JwtModule],
 })
 export class AuthModule {}

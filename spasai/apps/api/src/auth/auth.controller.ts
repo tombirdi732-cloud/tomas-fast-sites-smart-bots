@@ -1,14 +1,22 @@
 import { Body, Controller, Get, HttpCode, HttpStatus, Patch, Post } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
+import { IsString, Length } from 'class-validator';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthUser, CurrentUser, Public } from './auth.decorators';
 import { AuthService, type RequestCodeResult, type TokenPair } from './auth.service';
+import { TelegramService, type TelegramLoginStart } from './telegram.service';
 import { RefreshDto, RequestCodeDto, UpdateMeDto, VerifyCodeDto } from './dto/auth.dto';
+
+class TelegramPollDto {
+  @IsString()
+  @Length(8, 64)
+  nonce!: string;
+}
 
 interface MeResponse {
   id: string;
-  phone: string;
+  phone: string | null;
   name: string | null;
   email: string | null;
   avatarUrl: string | null;
@@ -21,6 +29,7 @@ export class AuthController {
   constructor(
     private readonly auth: AuthService,
     private readonly prisma: PrismaService,
+    private readonly telegram: TelegramService,
   ) {}
 
   /** Шаг 1. Отправка кода. Дополнительно прикрыт троттлингом по IP. */
@@ -53,6 +62,36 @@ export class AuthController {
   async demo(): Promise<TokenPair & { user: MeResponse }> {
     const { user, ...tokens } = await this.auth.demoLogin();
     return { ...tokens, user: AuthController.toMe(user) };
+  }
+
+  /** Шаг 1 входа через Telegram: ссылка на бота. */
+  @Public()
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @Post('telegram/start')
+  @HttpCode(HttpStatus.OK)
+  telegramStart(): Promise<TelegramLoginStart> {
+    return this.telegram.start();
+  }
+
+  /**
+   * Шаг 3: приложение спрашивает, нажал ли пользователь «Старт» у бота.
+   * Пока не нажал — отвечаем `pending`, это не ошибка.
+   */
+  @Public()
+  @Throttle({ default: { limit: 120, ttl: 60_000 } })
+  @Post('telegram/poll')
+  @HttpCode(HttpStatus.OK)
+  async telegramPoll(
+    @Body() dto: TelegramPollDto,
+  ): Promise<{ status: 'pending' } | (TokenPair & { status: 'ok'; user: MeResponse })> {
+    const confirmed = await this.telegram.claim(dto.nonce);
+    if (!confirmed) return { status: 'pending' };
+
+    const { user, ...tokens } = await this.auth.loginByTelegram(
+      confirmed.telegramId,
+      confirmed.firstName,
+    );
+    return { status: 'ok', ...tokens, user: AuthController.toMe(user) };
   }
 
   @Public()
@@ -89,7 +128,7 @@ export class AuthController {
 
   private static toMe(user: {
     id: string;
-    phone: string;
+    phone: string | null;
     name: string | null;
     email: string | null;
     avatarUrl: string | null;

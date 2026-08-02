@@ -15,7 +15,8 @@ export interface JwtPayload {
   /** id пользователя */
   sub: string;
   role: UserRole;
-  phone: string;
+  /** У пришедших из Telegram телефона нет. */
+  phone: string | null;
 }
 
 export interface TokenPair {
@@ -202,6 +203,34 @@ export class AuthService {
 
     const tokens = await this.issueTokens(user);
     this.logger.log(`Демо-вход: заведён аккаунт ${phone}`);
+    return { ...tokens, user };
+  }
+
+  /**
+   * Вход по подтверждённому Telegram: находим пользователя по его id
+   * или заводим нового. Телефона у такого аккаунта нет — и не нужен.
+   */
+  async loginByTelegram(
+    telegramId: string,
+    firstName: string | null,
+  ): Promise<TokenPair & { user: User }> {
+    const user = await this.prisma.user.upsert({
+      where: { telegramId },
+      // Имя не перезаписываем: пользователь мог задать своё в профиле.
+      update: {},
+      create: { telegramId, name: firstName, role: UserRole.customer },
+    });
+
+    if (user.isBlocked) {
+      throw new ApiException(
+        HttpStatus.FORBIDDEN,
+        AuthErrorCode.USER_BLOCKED,
+        'Аккаунт заблокирован',
+      );
+    }
+
+    const tokens = await this.issueTokens(user);
+    this.logger.log(`Вход через Telegram: ${telegramId} (${user.role})`);
     return { ...tokens, user };
   }
 

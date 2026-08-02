@@ -29,6 +29,19 @@ export const envSchema = z.object({
   SMS_SENDER: z.string().default(''),
 
   /**
+   * Бот для входа через Telegram — бесплатная замена SMS.
+   * Токен выдаёт @BotFather, имя пользователя нужно для ссылки t.me/<имя>.
+   * Пусто — вход через Telegram выключен.
+   */
+  TELEGRAM_BOT_TOKEN: z.string().default(''),
+  TELEGRAM_BOT_USERNAME: z.string().default(''),
+  /**
+   * Публичный адрес API для вебхука Telegram. Нужен только чтобы бот знал,
+   * куда слать обновления: https://домен/api/webhooks/telegram
+   */
+  PUBLIC_API_URL: z.string().default(''),
+
+  /**
    * Демо-вход без номера и кода (`POST /auth/demo`). Нужен, пока не
    * подключена рассылка SMS: иначе в приложение не попасть вообще.
    * Заводит только новый пустой аккаунт в служебном диапазоне номеров —
@@ -103,6 +116,9 @@ export function validateEnv(raw: Record<string, unknown>): Env {
      * А вот если и SMS не настроены, и демо-вход выключен, войти не сможет
      * никто: это уже ошибка конфигурации, и лучше упасть сразу.
      */
+    const telegramConfigured =
+      parsed.data.TELEGRAM_BOT_TOKEN.length > 0 && parsed.data.TELEGRAM_BOT_USERNAME.length > 0;
+
     const smsConfigured =
       parsed.data.SMS_PROVIDER === 'smsru'
         ? Boolean(parsed.data.SMS_API_ID)
@@ -112,15 +128,18 @@ export function validateEnv(raw: Record<string, unknown>): Env {
       const missing =
         parsed.data.SMS_PROVIDER === 'smsru' ? 'SMS_API_ID' : 'SMS_LOGIN и SMS_PASSWORD';
 
-      if (!parsed.data.DEMO_LOGIN) {
+      if (!parsed.data.DEMO_LOGIN && !telegramConfigured) {
         throw new Error(
           `SMS_PROVIDER=${parsed.data.SMS_PROVIDER} требует ${missing}. ` +
-            'Либо заполните их, либо включите DEMO_LOGIN=true — иначе войти не сможет никто.',
+            'Либо заполните их, либо настройте вход через Telegram ' +
+            '(TELEGRAM_BOT_TOKEN и TELEGRAM_BOT_USERNAME), либо включите ' +
+            'DEMO_LOGIN=true — иначе войти не сможет никто.',
         );
       }
 
       console.warn(
-        `⚠ ${missing} не заданы: SMS не отправляются, вход возможен только демо-кнопкой.`,
+        `⚠ ${missing} не заданы: SMS не отправляются. Вход — ` +
+          `${telegramConfigured ? 'через Telegram' : 'только демо-кнопкой'}.`,
       );
     }
 

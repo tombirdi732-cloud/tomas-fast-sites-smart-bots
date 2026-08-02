@@ -1,10 +1,19 @@
-import { useState } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput } from 'react-native';
+import { useRef, useState } from 'react';
+import {
+  KeyboardAvoidingView,
+  Linking,
+  Platform,
+  Pressable,
+  ScrollView,
+  Text,
+  TextInput,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ApiError, api, getApiUrl, saveTokens, setApiUrl } from '../api';
 import { Button, Notice } from '../components';
 import { loginAsDemo } from '../demoLogin';
+import { awaitTelegramLogin, startTelegramLogin } from '../telegramLogin';
 import { useSession } from '../session';
 import { useTheme } from '../theme';
 
@@ -22,6 +31,9 @@ export function LoginScreen() {
   // Адрес бэкенда: в собранном APK его нужно указать вручную.
   const [serverOpen, setServerOpen] = useState(false);
   const [server, setServer] = useState(getApiUrl());
+  // Пока ждём нажатия «Старт» у бота, экран показывает подсказку.
+  const [waitingTelegram, setWaitingTelegram] = useState(false);
+  const cancelTelegram = useRef(false);
 
   const input = {
     backgroundColor: theme.card,
@@ -51,6 +63,31 @@ export function LoginScreen() {
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Не удалось отправить код');
     } finally {
+      setBusy(false);
+    }
+  }
+
+  /** Вход через Telegram: открываем бота и ждём, пока там нажмут «Старт». */
+  async function telegram() {
+    setError(null);
+    setBusy(true);
+    try {
+      const { nonce, url, expiresIn } = await startTelegramLogin();
+      await Linking.openURL(url);
+
+      cancelTelegram.current = false;
+      setWaitingTelegram(true);
+
+      const ok = await awaitTelegramLogin(nonce, expiresIn, () => cancelTelegram.current);
+      if (ok) {
+        await reload();
+      } else if (!cancelTelegram.current) {
+        setError('Время на вход истекло. Попробуйте ещё раз.');
+      }
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Не удалось открыть Telegram');
+    } finally {
+      setWaitingTelegram(false);
       setBusy(false);
     }
   }
@@ -107,6 +144,33 @@ export function LoginScreen() {
 
           {step === 'phone' ? (
             <>
+              {waitingTelegram ? (
+                <>
+                  <Text style={{ color: theme.inkSoft, fontSize: 15, lineHeight: 22 }}>
+                    Открыли Telegram. Нажмите там «Старт» — и вернитесь сюда, вход произойдёт сам.
+                  </Text>
+                  <Button
+                    title="Отмена"
+                    variant="ghost"
+                    onPress={() => {
+                      cancelTelegram.current = true;
+                      setWaitingTelegram(false);
+                    }}
+                  />
+                </>
+              ) : (
+                <Button
+                  title="Войти через Telegram"
+                  icon="paper-plane"
+                  onPress={() => void telegram()}
+                  loading={busy}
+                />
+              )}
+
+              <Text style={{ color: theme.inkFaint, fontSize: 13, textAlign: 'center' }}>
+                или по номеру телефона
+              </Text>
+
               <Text style={{ color: theme.inkSoft, fontSize: 15, lineHeight: 22 }}>
                 Введите номер телефона — пришлём код для входа.
               </Text>
