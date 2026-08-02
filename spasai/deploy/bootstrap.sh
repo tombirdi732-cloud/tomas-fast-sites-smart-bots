@@ -2,10 +2,14 @@
 #
 # Разворачивает «Спасай» на чистом Ubuntu 24.04 с нуля.
 #
-#   curl -fsSL https://raw.githubusercontent.com/ВАШ-РЕПОЗИТОРИЙ/main/spasai/deploy/bootstrap.sh | bash -s -- spasai.ru you@example.com
+#   bash bootstrap.sh spasai.ru you@example.com
 #
 # Первый аргумент — домен, второй — почта для Let's Encrypt.
 # Скрипт можно запускать повторно: он пропускает уже сделанное.
+#
+# Репозиторий приватный, поэтому нужен токен GitHub с правом чтения:
+#   export SPASAI_TOKEN=github_pat_...
+# Без него скрипт объяснит, что делать, и остановится.
 
 set -euo pipefail
 
@@ -13,6 +17,7 @@ DOMAIN="${1:-}"
 EMAIL="${2:-}"
 REPO="${SPASAI_REPO:-https://github.com/tombirdi732-cloud/tomas-fast-sites-smart-bots.git}"
 BRANCH="${SPASAI_BRANCH:-claude/hello-create-hpsvnj}"
+TOKEN="${SPASAI_TOKEN:-}"
 ROOT=/opt/spasai
 
 if [[ -z "$DOMAIN" || -z "$EMAIL" ]]; then
@@ -22,6 +27,14 @@ if [[ -z "$DOMAIN" || -z "$EMAIL" ]]; then
 fi
 
 say() { printf '\n\033[32m▸ %s\033[0m\n' "$1"; }
+
+# Домен мог приехать из мессенджера с длинным тире вместо «--» —
+# тогда первым аргументом окажется мусор, а не адрес.
+if [[ ! "$DOMAIN" =~ ^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?)+$ ]]; then
+  echo "«$DOMAIN» не похоже на домен." >&2
+  echo "Проверьте, что в команде именно два дефиса (--), а не длинное тире." >&2
+  exit 1
+fi
 
 if [[ $EUID -ne 0 ]]; then
   echo "Запустите от root: sudo bash bootstrap.sh $DOMAIN $EMAIL" >&2
@@ -73,6 +86,15 @@ ufw allow 443/tcp >/dev/null
 ufw --force enable >/dev/null
 
 # ─── 5. Код ─────────────────────────────────────────────────────────────────
+# Репозиторий приватный: без токена git до него не достучится.
+if [[ -n "$TOKEN" ]]; then
+  # Токен кладём в файл для root, а не в URL репозитория: иначе он осел бы
+  # в .git/config и светился в выводе любой команды git remote.
+  git config --global credential.helper store
+  printf 'https://x-access-token:%s@github.com\n' "$TOKEN" > /root/.git-credentials
+  chmod 600 /root/.git-credentials
+fi
+
 if [[ -d "$ROOT/.git" ]]; then
   say "Обновляем код"
   git -C "$ROOT" fetch origin "$BRANCH" --quiet
@@ -80,7 +102,19 @@ if [[ -d "$ROOT/.git" ]]; then
   git -C "$ROOT" reset --hard "origin/$BRANCH" --quiet
 else
   say "Забираем код"
-  git clone --branch "$BRANCH" --depth 1 "$REPO" "$ROOT" --quiet
+  if ! git clone --branch "$BRANCH" --depth 1 "$REPO" "$ROOT" --quiet 2>/dev/null; then
+    echo >&2
+    echo "Не удалось скачать код из $REPO" >&2
+    echo >&2
+    echo "Репозиторий приватный — нужен токен GitHub с правом чтения:" >&2
+    echo "  1. https://github.com/settings/personal-access-tokens/new" >&2
+    echo "  2. Repository access → Only select repositories → выберите этот репозиторий" >&2
+    echo "  3. Permissions → Repository permissions → Contents: Read-only" >&2
+    echo "  4. Запустите скрипт так:" >&2
+    echo "     export SPASAI_TOKEN=github_pat_ваш_токен" >&2
+    echo "     bash bootstrap.sh $DOMAIN $EMAIL" >&2
+    exit 1
+  fi
 fi
 
 cd "$ROOT/spasai"

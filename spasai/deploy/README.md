@@ -96,10 +96,24 @@ CRON
 
 На чистом Ubuntu 24.04, от root:
 
+Репозиторий приватный, поэтому нужен токен GitHub с правом чтения.
+Создать: [Fine-grained token](https://github.com/settings/personal-access-tokens/new)
+→ Repository access: Only select repositories → этот репозиторий
+→ Permissions → Repository permissions → **Contents: Read-only**.
+
 ```bash
-curl -fsSL https://raw.githubusercontent.com/tombirdi732-cloud/tomas-fast-sites-smart-bots/claude/hello-create-hpsvnj/spasai/deploy/bootstrap.sh \
-  | bash -s -- spasai.ru you@example.com
+export SPASAI_TOKEN=github_pat_ваш_токен
+
+curl -H "Authorization: Bearer $SPASAI_TOKEN" -fsSL \
+  https://raw.githubusercontent.com/tombirdi732-cloud/tomas-fast-sites-smart-bots/claude/hello-create-hpsvnj/spasai/deploy/bootstrap.sh \
+  -o bootstrap.sh
+
+bash bootstrap.sh spasai.ru you@example.com
 ```
+
+Токен нужен дважды: чтобы скачать сам скрипт и чтобы он забрал код.
+Скрипт кладёт его в `/root/.git-credentials` с правами 600 — в URL
+репозитория токен не попадает и в выводе `git remote` не светится.
 
 Домен и почта для сертификата — аргументы. Скрипт проверяет, что A-запись
 уже ведёт на этот сервер, добавляет swap, ставит Docker, закрывает файрвол,
