@@ -8,6 +8,8 @@ import { AuthService } from './auth.service';
 import { SmsService } from './sms.service';
 import { TelegramWebhookController } from './telegram.controller';
 import { TelegramService } from './telegram.service';
+import { YandexCallbackController } from './yandex.controller';
+import { YandexService } from './yandex.service';
 
 @Global()
 @Module({
@@ -20,8 +22,8 @@ import { TelegramService } from './telegram.service';
       }),
     }),
   ],
-  controllers: [AuthController, TelegramWebhookController],
-  providers: [AuthService, SmsService, TelegramService],
-  exports: [AuthService, TelegramService, JwtModule],
+  controllers: [AuthController, TelegramWebhookController, YandexCallbackController],
+  providers: [AuthService, SmsService, TelegramService, YandexService],
+  exports: [AuthService, TelegramService, YandexService, JwtModule],
 })
 export class AuthModule {}

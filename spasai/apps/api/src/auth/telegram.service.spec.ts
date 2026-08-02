@@ -1,58 +1,56 @@
-import { ConfigService } from '@nestjs/config';
-
-import type { Env } from '../config/env';
-import { PrismaService } from '../prisma/prisma.service';
 import { TelegramService } from './telegram.service';
 
-function makeService(overrides: Partial<Record<keyof Env, unknown>> = {}) {
-  const values: Record<string, unknown> = {
-    TELEGRAM_BOT_TOKEN: '123456:TEST',
-    TELEGRAM_BOT_USERNAME: 'spasai_bot',
-    PUBLIC_API_URL: '',
-    ...overrides,
-  };
+const ENV: Record<string, unknown> = {
+  TELEGRAM_BOT_TOKEN: '123456:TEST',
+  TELEGRAM_BOT_USERNAME: 'spasai_bot',
+  PUBLIC_API_URL: '',
+};
 
-  const config = { get: (key: string) => values[key] } as unknown as ConfigService<Env, true>;
+const BASE_LOGIN = {
+  id: 'l1',
+  provider: 'telegram',
+  state: 'n1',
+  externalId: null as string | null,
+  login: null as string | null,
+  displayName: null as string | null,
+  email: null as string | null,
+  confirmedAt: null as Date | null,
+  usedAt: null as Date | null,
+  expiresAt: new Date(Date.now() + 60_000),
+  createdAt: new Date(),
+};
 
-  const login = {
-    id: 'l1',
-    nonce: 'n1',
-    telegramId: null,
-    username: null,
-    firstName: null,
-    confirmedAt: null,
-    usedAt: null,
-    expiresAt: new Date(Date.now() + 60_000),
-    createdAt: new Date(),
-  };
+function makeService(overrides: { env?: Record<string, unknown>; login?: unknown } = {}) {
+  const values = { ...ENV, ...overrides.env };
 
   const prisma = {
-    telegramLogin: {
-      findUnique: jest.fn().mockResolvedValue(login),
-      update: jest.fn().mockResolvedValue(login),
-      create: jest.fn().mockResolvedValue(login),
+    externalLogin: {
+      findUnique: jest.fn(() => Promise.resolve(overrides.login ?? BASE_LOGIN)),
+      update: jest.fn(() => Promise.resolve(BASE_LOGIN)),
+      create: jest.fn(() => Promise.resolve(BASE_LOGIN)),
     },
-  } as unknown as PrismaService;
+  };
 
-  return { service: new TelegramService(config, prisma), prisma, login };
+  const config = { get: (key: string) => values[key] };
+  const service = new TelegramService(config as never, prisma as never);
+  return { service, prisma };
 }
 
 describe('TelegramService', () => {
   beforeEach(() => {
-    global.fetch = jest.fn().mockResolvedValue({
-      json: async () => ({ ok: true }),
-    }) as unknown as typeof fetch;
+    global.fetch = jest.fn(() =>
+      Promise.resolve({ json: () => Promise.resolve({ ok: true }) }),
+    ) as unknown as typeof fetch;
   });
 
   it('выключен без токена', () => {
-    const { service } = makeService({ TELEGRAM_BOT_TOKEN: '' });
+    const { service } = makeService({ env: { TELEGRAM_BOT_TOKEN: '' } });
     expect(service.enabled).toBe(false);
   });
 
-  it('секрет вебхука выводится из токена и не пуст', () => {
+  it('секрет вебхука выводится из токена и не содержит его целиком', () => {
     const { service } = makeService();
     expect(service.webhookSecret.length).toBeGreaterThan(10);
-    // Токен целиком в секрет не попадает: двоеточие в base64url не переживает.
     expect(service.webhookSecret).not.toContain('123456:TEST');
   });
 
@@ -74,11 +72,15 @@ describe('TelegramService', () => {
       },
     });
 
-    const update = (prisma.telegramLogin.update as jest.Mock).mock.calls[0][0] as {
-      data: { telegramId: string; confirmedAt: Date };
-    };
-    expect(update.data.telegramId).toBe('777');
-    expect(update.data.confirmedAt).toBeInstanceOf(Date);
+    expect(prisma.externalLogin.update).toHaveBeenCalledWith({
+      where: { id: 'l1' },
+      data: {
+        externalId: '777',
+        login: 'olga',
+        displayName: 'Ольга',
+        confirmedAt: expect.any(Date) as Date,
+      },
+    });
   });
 
   it('не реагирует на сообщения ботов', async () => {
@@ -88,7 +90,7 @@ describe('TelegramService', () => {
       message: { text: '/start n1', chat: { id: 1 }, from: { id: 5, is_bot: true } },
     });
 
-    expect(prisma.telegramLogin.update).not.toHaveBeenCalled();
+    expect(prisma.externalLogin.update).not.toHaveBeenCalled();
   });
 
   it('не реагирует на обычный текст без nonce', async () => {
@@ -98,7 +100,7 @@ describe('TelegramService', () => {
       message: { text: 'привет', chat: { id: 1 }, from: { id: 5 } },
     });
 
-    expect(prisma.telegramLogin.update).not.toHaveBeenCalled();
+    expect(prisma.externalLogin.update).not.toHaveBeenCalled();
   });
 
   it('пока «Старт» не нажали, вход не выдаётся', async () => {
@@ -107,12 +109,13 @@ describe('TelegramService', () => {
   });
 
   it('подтверждённый вход отдаётся один раз', async () => {
-    const { service, prisma, login } = makeService();
-    (prisma.telegramLogin.findUnique as jest.Mock).mockResolvedValue({
-      ...login,
-      telegramId: '777',
-      firstName: 'Ольга',
-      confirmedAt: new Date(),
+    const { service, prisma } = makeService({
+      login: {
+        ...BASE_LOGIN,
+        externalId: '777',
+        displayName: 'Ольга',
+        confirmedAt: new Date(),
+      },
     });
 
     await expect(service.claim('n1')).resolves.toEqual({
@@ -120,21 +123,34 @@ describe('TelegramService', () => {
       firstName: 'Ольга',
     });
     // Запись помечается использованной — второй раз токены не выдать.
-    expect(prisma.telegramLogin.update).toHaveBeenCalledWith({
+    expect(prisma.externalLogin.update).toHaveBeenCalledWith({
       where: { id: 'l1' },
-      data: { usedAt: expect.any(Date) },
+      data: { usedAt: expect.any(Date) as Date },
     });
   });
 
   it('просроченный вход отклоняется', async () => {
-    const { service, prisma, login } = makeService();
-    (prisma.telegramLogin.findUnique as jest.Mock).mockResolvedValue({
-      ...login,
-      confirmedAt: new Date(),
-      telegramId: '777',
-      expiresAt: new Date(Date.now() - 1000),
+    const { service } = makeService({
+      login: {
+        ...BASE_LOGIN,
+        externalId: '777',
+        confirmedAt: new Date(),
+        expiresAt: new Date(Date.now() - 1000),
+      },
     });
 
     await expect(service.claim('n1')).rejects.toThrow(/истекло/);
+  });
+
+  it('чужой провайдер в записи не принимается', async () => {
+    const { service, prisma } = makeService({
+      login: { ...BASE_LOGIN, provider: 'yandex' },
+    });
+
+    await service.handleUpdate({
+      message: { text: '/start n1', chat: { id: 1 }, from: { id: 777 } },
+    });
+
+    expect(prisma.externalLogin.update).not.toHaveBeenCalled();
   });
 });

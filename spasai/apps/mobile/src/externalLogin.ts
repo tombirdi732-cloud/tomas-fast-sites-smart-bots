@@ -1,15 +1,19 @@
 import { ApiError, api, saveTokens } from './api';
 
 /**
- * Вход через Telegram — бесплатная замена SMS.
+ * Вход через внешний сервис — бесплатная замена SMS.
  *
- * Сервер выдаёт одноразовую ссылку на бота; пользователь жмёт там «Старт»,
- * бот сообщает об этом серверу, а приложение всё это время переспрашивает,
- * не подтвердился ли вход. Ни номера, ни кода вводить не нужно.
+ * Сервер выдаёт одноразовую ссылку, пользователь подтверждает вход на
+ * стороне сервиса, а приложение всё это время переспрашивает, не
+ * подтвердилось ли. Ни номера, ни кода вводить не нужно.
+ *
+ * Яндекс — основной путь: он работает с российского хостинга.
+ * Telegram оставлен как второй, но с российского сервера до него
+ * трафик не проходит.
  */
 
 interface StartResult {
-  nonce: string;
+  state: string;
   url: string;
   expiresIn: number;
 }
@@ -19,16 +23,24 @@ type PollResult = { status: 'pending' } | { status: 'ok'; accessToken: string; r
 /** Раз в сколько спрашиваем сервер. Чаще незачем — человек жмёт кнопку. */
 const POLL_INTERVAL_MS = 2000;
 
-export async function startTelegramLogin(): Promise<StartResult> {
-  return api<StartResult>('/auth/telegram/start', { method: 'POST', auth: false });
+export type Provider = 'yandex' | 'telegram';
+
+export async function startExternalLogin(provider: Provider): Promise<StartResult> {
+  const result = await api<{ url: string; expiresIn: number; state?: string; nonce?: string }>(
+    `/auth/${provider}/start`,
+    { method: 'POST', auth: false },
+  );
+  // Telegram называет ключ nonce, Яндекс — state; наружу отдаём одинаково.
+  return { url: result.url, expiresIn: result.expiresIn, state: result.state ?? result.nonce! };
 }
 
 /**
  * Ждём подтверждения. Возвращает true, когда вошли; false — если время
  * вышло. `shouldStop` даёт экрану прервать ожидание (например, при уходе).
  */
-export async function awaitTelegramLogin(
-  nonce: string,
+export async function awaitExternalLogin(
+  provider: Provider,
+  state: string,
   expiresIn: number,
   shouldStop: () => boolean,
 ): Promise<boolean> {
@@ -42,9 +54,9 @@ export async function awaitTelegramLogin(
 
     let result: PollResult;
     try {
-      result = await api<PollResult>('/auth/telegram/poll', {
+      result = await api<PollResult>(`/auth/${provider}/poll`, {
         method: 'POST',
-        body: { nonce },
+        body: provider === 'telegram' ? { nonce: state } : { state },
         auth: false,
       });
     } catch (error) {

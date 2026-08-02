@@ -36,6 +36,13 @@ export const envSchema = z.object({
   TELEGRAM_BOT_TOKEN: z.string().default(''),
   TELEGRAM_BOT_USERNAME: z.string().default(''),
   /**
+   * Яндекс ID — вход, который работает с российского хостинга.
+   * Ключи из кабинета oauth.yandex.ru. Пусто — вход выключен.
+   */
+  YANDEX_CLIENT_ID: z.string().default(''),
+  YANDEX_CLIENT_SECRET: z.string().default(''),
+
+  /**
    * Публичный адрес API для вебхука Telegram. Нужен только чтобы бот знал,
    * куда слать обновления: https://домен/api/webhooks/telegram
    */
@@ -118,6 +125,8 @@ export function validateEnv(raw: Record<string, unknown>): Env {
      */
     const telegramConfigured =
       parsed.data.TELEGRAM_BOT_TOKEN.length > 0 && parsed.data.TELEGRAM_BOT_USERNAME.length > 0;
+    const yandexConfigured =
+      parsed.data.YANDEX_CLIENT_ID.length > 0 && parsed.data.YANDEX_CLIENT_SECRET.length > 0;
 
     const smsConfigured =
       parsed.data.SMS_PROVIDER === 'smsru'
@@ -128,18 +137,18 @@ export function validateEnv(raw: Record<string, unknown>): Env {
       const missing =
         parsed.data.SMS_PROVIDER === 'smsru' ? 'SMS_API_ID' : 'SMS_LOGIN и SMS_PASSWORD';
 
-      if (!parsed.data.DEMO_LOGIN && !telegramConfigured) {
+      if (!parsed.data.DEMO_LOGIN && !telegramConfigured && !yandexConfigured) {
         throw new Error(
           `SMS_PROVIDER=${parsed.data.SMS_PROVIDER} требует ${missing}. ` +
-            'Либо заполните их, либо настройте вход через Telegram ' +
-            '(TELEGRAM_BOT_TOKEN и TELEGRAM_BOT_USERNAME), либо включите ' +
-            'DEMO_LOGIN=true — иначе войти не сможет никто.',
+            'Либо заполните их, либо настройте вход через Яндекс ' +
+            '(YANDEX_CLIENT_ID и YANDEX_CLIENT_SECRET) или Telegram, либо ' +
+            'включите DEMO_LOGIN=true — иначе войти не сможет никто.',
         );
       }
 
       console.warn(
         `⚠ ${missing} не заданы: SMS не отправляются. Вход — ` +
-          `${telegramConfigured ? 'через Telegram' : 'только демо-кнопкой'}.`,
+          `${yandexConfigured ? 'через Яндекс' : telegramConfigured ? 'через Telegram' : 'только демо-кнопкой'}.`,
       );
     }
 

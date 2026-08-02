@@ -73,10 +73,12 @@ enum NotificationType {
 
 model User {
   id         String   @id @default(uuid()) @db.Uuid
-  /// Телефон есть не у всех: вход через Telegram обходится без него.
+  /// Телефон есть не у всех: вход через внешний сервис обходится без него.
   phone      String?  @unique @db.VarChar(20)
-  /// id пользователя в Telegram — второй способ войти, без SMS и без номера.
+  /// id в Telegram — вход без SMS и без номера.
   telegramId String?  @unique @map("telegram_id") @db.VarChar(32)
+  /// id в Яндексе — то же самое, но работает с российского хостинга.
+  yandexId   String?  @unique @map("yandex_id") @db.VarChar(64)
   name       String?  @db.VarChar(120)
   email      String?  @db.VarChar(255)
   avatarUrl  String?  @map("avatar_url") @db.VarChar(1024)
@@ -98,16 +100,24 @@ model User {
   @@map("users")
 }
 
-/// Начатый вход через Telegram. Приложение открывает бота со ссылкой
-/// вида t.me/bot?start=<nonce>, бот присылает этот nonce обратно вебхуком,
-/// и запись становится подтверждённой — тогда приложение забирает токены.
-model TelegramLogin {
-  id          String    @id @default(uuid()) @db.Uuid
-  /// Одноразовый код в ссылке. Только он связывает устройство и Telegram.
-  nonce       String    @unique @db.VarChar(64)
-  telegramId  String?   @map("telegram_id") @db.VarChar(32)
-  username    String?   @db.VarChar(64)
-  firstName   String?   @map("first_name") @db.VarChar(120)
+/// Начатый вход через внешний сервис (Telegram, Яндекс).
+///
+/// Живёт минуты: приложение получает `state`, уводит пользователя на
+/// сервис, тот подтверждает — и приложение обменивает `state` на токены.
+/// Запись одноразовая, поэтому перехваченный `state` бесполезен после
+/// первого обмена.
+model ExternalLogin {
+  id       String @id @default(uuid()) @db.Uuid
+  /// telegram | yandex
+  provider String @db.VarChar(16)
+  /// Одноразовый код, связывающий устройство и подтверждение сервиса.
+  state    String @unique @db.VarChar(64)
+
+  /// id пользователя в сервисе — появляется после подтверждения.
+  externalId  String?   @map("external_id") @db.VarChar(64)
+  login       String?   @db.VarChar(120)
+  displayName String?   @map("display_name") @db.VarChar(120)
+  email       String?   @db.VarChar(255)
   confirmedAt DateTime? @map("confirmed_at") @db.Timestamptz(6)
   /// Токены забирают ровно один раз — повторный запрос ничего не вернёт.
   usedAt      DateTime? @map("used_at") @db.Timestamptz(6)
@@ -115,7 +125,7 @@ model TelegramLogin {
   createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
 
   @@index([expiresAt])
-  @@map("telegram_logins")
+  @@map("external_logins")
 }
 
 /// Заведение. Геопоиск идёт по выражению

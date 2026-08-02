@@ -14,13 +14,13 @@ interface VerifyResponse {
   refreshToken: string;
 }
 
-interface TelegramStart {
-  nonce: string;
+interface ExternalStart {
+  state: string;
   url: string;
   expiresIn: number;
 }
 
-type TelegramPoll = { status: 'pending' } | ({ status: 'ok' } & VerifyResponse);
+type ExternalPoll = { status: 'pending' } | ({ status: 'ok' } & VerifyResponse);
 
 /** Вход по номеру телефона и SMS-коду. В dev код всегда 0000. */
 export function LoginPage() {
@@ -32,8 +32,8 @@ export function LoginPage() {
   const [hint, setHint] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [waitingTelegram, setWaitingTelegram] = useState(false);
-  const cancelTelegram = useRef(false);
+  const [waitingYandex, setWaitingYandex] = useState(false);
+  const cancelYandex = useRef(false);
 
   async function requestCode(event: React.FormEvent) {
     event.preventDefault();
@@ -59,30 +59,30 @@ export function LoginPage() {
   }
 
   /**
-   * Вход через Telegram: открываем бота в новой вкладке и ждём, пока
-   * там нажмут «Старт». Бесплатная замена SMS.
+   * Вход через Яндекс ID: уводим подтверждать в новую вкладку и ждём.
+   * Бесплатная замена SMS, работающая с российского хостинга.
    */
-  async function telegram() {
+  async function yandex() {
     setError(null);
     setBusy(true);
     try {
-      const start = await api<TelegramStart>('/auth/telegram/start', {
+      const start = await api<ExternalStart>('/auth/yandex/start', {
         method: 'POST',
         auth: false,
       });
       window.open(start.url, '_blank', 'noopener');
 
-      cancelTelegram.current = false;
-      setWaitingTelegram(true);
+      cancelYandex.current = false;
+      setWaitingYandex(true);
 
       const deadline = Date.now() + start.expiresIn * 1000;
-      while (Date.now() < deadline && !cancelTelegram.current) {
+      while (Date.now() < deadline && !cancelYandex.current) {
         await new Promise((resolve) => setTimeout(resolve, 2000));
-        if (cancelTelegram.current) break;
+        if (cancelYandex.current) break;
 
-        const result = await api<TelegramPoll>('/auth/telegram/poll', {
+        const result = await api<ExternalPoll>('/auth/yandex/poll', {
           method: 'POST',
-          body: { nonce: start.nonce },
+          body: { state: start.state },
           auth: false,
         });
 
@@ -93,11 +93,11 @@ export function LoginPage() {
         }
       }
 
-      if (!cancelTelegram.current) setError('Время на вход истекло. Попробуйте ещё раз.');
+      if (!cancelYandex.current) setError('Время на вход истекло. Попробуйте ещё раз.');
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Не удалось войти через Telegram');
+      setError(err instanceof ApiError ? err.message : 'Не удалось войти через Яндекс');
     } finally {
-      setWaitingTelegram(false);
+      setWaitingYandex(false);
       setBusy(false);
     }
   }
@@ -152,25 +152,25 @@ export function LoginPage() {
 
         {step === 'phone' ? (
           <form className="form card" onSubmit={requestCode}>
-            {waitingTelegram ? (
+            {waitingYandex ? (
               <>
                 <div className="alert alert--ok">
-                  Открыли Telegram. Нажмите там «Старт» — вход произойдёт сам.
+                  Открыли Яндекс в соседней вкладке. Подтвердите вход — здесь всё случится само.
                 </div>
                 <button
                   className="btn btn--ghost"
                   type="button"
                   onClick={() => {
-                    cancelTelegram.current = true;
-                    setWaitingTelegram(false);
+                    cancelYandex.current = true;
+                    setWaitingYandex(false);
                   }}
                 >
                   Отмена
                 </button>
               </>
             ) : (
-              <button className="btn" type="button" onClick={() => void telegram()} disabled={busy}>
-                Войти через Telegram
+              <button className="btn" type="button" onClick={() => void yandex()} disabled={busy}>
+                Войти через Яндекс
               </button>
             )}
 

@@ -6,12 +6,19 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AuthUser, CurrentUser, Public } from './auth.decorators';
 import { AuthService, type RequestCodeResult, type TokenPair } from './auth.service';
 import { TelegramService, type TelegramLoginStart } from './telegram.service';
+import { YandexService, type YandexLoginStart } from './yandex.service';
 import { RefreshDto, RequestCodeDto, UpdateMeDto, VerifyCodeDto } from './dto/auth.dto';
 
 class TelegramPollDto {
   @IsString()
   @Length(8, 64)
   nonce!: string;
+}
+
+class YandexPollDto {
+  @IsString()
+  @Length(8, 64)
+  state!: string;
 }
 
 interface MeResponse {
@@ -30,6 +37,7 @@ export class AuthController {
     private readonly auth: AuthService,
     private readonly prisma: PrismaService,
     private readonly telegram: TelegramService,
+    private readonly yandex: YandexService,
   ) {}
 
   /** Шаг 1. Отправка кода. Дополнительно прикрыт троттлингом по IP. */
@@ -90,6 +98,34 @@ export class AuthController {
     const { user, ...tokens } = await this.auth.loginByTelegram(
       confirmed.telegramId,
       confirmed.firstName,
+    );
+    return { status: 'ok', ...tokens, user: AuthController.toMe(user) };
+  }
+
+  /** Шаг 1 входа через Яндекс: ссылка на страницу подтверждения. */
+  @Public()
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @Post('yandex/start')
+  @HttpCode(HttpStatus.OK)
+  yandexStart(): Promise<YandexLoginStart> {
+    return this.yandex.start();
+  }
+
+  /** Шаг 3: приложение спрашивает, подтвердил ли пользователь вход. */
+  @Public()
+  @Throttle({ default: { limit: 120, ttl: 60_000 } })
+  @Post('yandex/poll')
+  @HttpCode(HttpStatus.OK)
+  async yandexPoll(
+    @Body() dto: YandexPollDto,
+  ): Promise<{ status: 'pending' } | (TokenPair & { status: 'ok'; user: MeResponse })> {
+    const confirmed = await this.yandex.claim(dto.state);
+    if (!confirmed) return { status: 'pending' };
+
+    const { user, ...tokens } = await this.auth.loginByYandex(
+      confirmed.externalId,
+      confirmed.displayName,
+      confirmed.email,
     );
     return { status: 'ok', ...tokens, user: AuthController.toMe(user) };
   }

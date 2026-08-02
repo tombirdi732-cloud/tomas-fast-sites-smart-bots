@@ -149,6 +149,9 @@ ORDER BY distance_m;
 POST   /auth/request-code          публичный, 1 код в минуту на номер
 POST   /auth/verify-code           публичный, при SMS_PROVIDER=stub код 0000
 POST   /auth/demo                  публичный, вход без номера при DEMO_LOGIN=true
+POST   /auth/yandex/start          публичный, ссылка на подтверждение Яндекса
+POST   /auth/yandex/poll           публичный, { state } → pending либо токены
+GET    /auth/yandex/callback       сюда Яндекс возвращает пользователя
 POST   /auth/telegram/start        публичный, ссылка на бота для входа
 POST   /auth/telegram/poll         публичный, { nonce } → pending либо токены
 POST   /webhooks/telegram          от Telegram, проверяется секретным заголовком
@@ -267,9 +270,15 @@ MapKit требует Android 8.0, поэтому `minSdkVersion` поднят �
 
 | Способ | Чего стоит | Когда работает |
 |---|---|---|
+| Яндекс ID | бесплатно | заданы `YANDEX_CLIENT_ID` и `YANDEX_CLIENT_SECRET` |
 | Telegram-бот | бесплатно | заданы `TELEGRAM_BOT_TOKEN` и `TELEGRAM_BOT_USERNAME` |
 | SMS-код | платно, от 4 ₽ за сообщение | задан провайдер и его ключи |
 | Демо-вход | бесплатно | `DEMO_LOGIN=true`, временная мера |
+
+> ⚠️ **Telegram с российского хостинга не работает.** Проверено на боевом
+> сервере: `api.telegram.org` недоступен изнутри (`fetch failed`), а вебхук
+> снаружи не доставляется (`Connection timed out`). Нужен прокси вне РФ —
+> либо Яндекс ID, который до России достучится всегда.
 
 Телефон необязателен: у пришедших через Telegram его нет вовсе, а для
 выдачи заказа он и не нужен — там код. На уровне БД стоит CHECK, что хотя

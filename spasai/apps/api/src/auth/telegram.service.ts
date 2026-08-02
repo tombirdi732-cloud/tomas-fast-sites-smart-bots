@@ -129,8 +129,12 @@ export class TelegramService implements OnModuleInit {
 
     const nonce = randomBytes(16).toString('base64url');
 
-    await this.prisma.telegramLogin.create({
-      data: { nonce, expiresAt: new Date(Date.now() + LOGIN_TTL_SEC * 1000) },
+    await this.prisma.externalLogin.create({
+      data: {
+        provider: 'telegram',
+        state: nonce,
+        expiresAt: new Date(Date.now() + LOGIN_TTL_SEC * 1000),
+      },
     });
 
     return {
@@ -153,19 +157,19 @@ export class TelegramService implements OnModuleInit {
     if (!match) return;
 
     const nonce = match[1];
-    const login = await this.prisma.telegramLogin.findUnique({ where: { nonce } });
+    const login = await this.prisma.externalLogin.findUnique({ where: { state: nonce } });
 
-    if (!login || login.usedAt || login.expiresAt.getTime() < Date.now()) {
+    if (!login || login.provider !== 'telegram' || login.usedAt || login.expiresAt.getTime() < Date.now()) {
       await this.reply(message.chat?.id, 'Ссылка для входа устарела. Откройте приложение заново.');
       return;
     }
 
-    await this.prisma.telegramLogin.update({
+    await this.prisma.externalLogin.update({
       where: { id: login.id },
       data: {
-        telegramId: String(from.id),
-        username: from.username ?? null,
-        firstName: from.first_name ?? null,
+        externalId: String(from.id),
+        login: from.username ?? null,
+        displayName: from.first_name ?? null,
         confirmedAt: new Date(),
       },
     });
@@ -190,7 +194,7 @@ export class TelegramService implements OnModuleInit {
    * пользователя, которого можно пустить внутрь.
    */
   async claim(nonce: string): Promise<{ telegramId: string; firstName: string | null } | null> {
-    const login = await this.prisma.telegramLogin.findUnique({ where: { nonce } });
+    const login = await this.prisma.externalLogin.findUnique({ where: { state: nonce } });
 
     if (!login) {
       throw ApiException.badRequest('TELEGRAM_LOGIN_UNKNOWN', 'Вход не найден, начните заново');
@@ -201,22 +205,22 @@ export class TelegramService implements OnModuleInit {
     if (login.expiresAt.getTime() < Date.now()) {
       throw ApiException.badRequest('TELEGRAM_LOGIN_EXPIRED', 'Время на вход истекло, начните заново');
     }
-    if (!login.confirmedAt || !login.telegramId) {
+    if (!login.confirmedAt || !login.externalId) {
       return null;
     }
 
     // Помечаем использованным сразу: пара токенов выдаётся ровно один раз.
-    await this.prisma.telegramLogin.update({
+    await this.prisma.externalLogin.update({
       where: { id: login.id },
       data: { usedAt: new Date() },
     });
 
-    return { telegramId: login.telegramId, firstName: login.firstName };
+    return { telegramId: login.externalId, firstName: login.displayName };
   }
 
   /** Подчищаем протухшие записи — их некому забирать. */
   async purgeExpired(): Promise<number> {
-    const { count } = await this.prisma.telegramLogin.deleteMany({
+    const { count } = await this.prisma.externalLogin.deleteMany({
       where: { expiresAt: { lt: new Date() } },
     });
     return count;

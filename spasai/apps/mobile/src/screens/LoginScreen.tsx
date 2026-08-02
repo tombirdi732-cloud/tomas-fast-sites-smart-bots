@@ -13,7 +13,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { ApiError, api, getApiUrl, saveTokens, setApiUrl } from '../api';
 import { Button, Notice } from '../components';
 import { loginAsDemo } from '../demoLogin';
-import { awaitTelegramLogin, startTelegramLogin } from '../telegramLogin';
+import { awaitExternalLogin, startExternalLogin } from '../externalLogin';
+import type { Provider } from '../externalLogin';
 import { useSession } from '../session';
 import { useTheme } from '../theme';
 
@@ -31,9 +32,9 @@ export function LoginScreen() {
   // Адрес бэкенда: в собранном APK его нужно указать вручную.
   const [serverOpen, setServerOpen] = useState(false);
   const [server, setServer] = useState(getApiUrl());
-  // Пока ждём нажатия «Старт» у бота, экран показывает подсказку.
-  const [waitingTelegram, setWaitingTelegram] = useState(false);
-  const cancelTelegram = useRef(false);
+  // Пока ждём подтверждения на стороне сервиса, экран показывает подсказку.
+  const [waitingFor, setWaitingFor] = useState<Provider | null>(null);
+  const cancelExternal = useRef(false);
 
   const input = {
     backgroundColor: theme.card,
@@ -67,27 +68,27 @@ export function LoginScreen() {
     }
   }
 
-  /** Вход через Telegram: открываем бота и ждём, пока там нажмут «Старт». */
-  async function telegram() {
+  /** Вход через внешний сервис: уводим подтверждать и ждём результата. */
+  async function external(provider: Provider) {
     setError(null);
     setBusy(true);
     try {
-      const { nonce, url, expiresIn } = await startTelegramLogin();
+      const { state, url, expiresIn } = await startExternalLogin(provider);
       await Linking.openURL(url);
 
-      cancelTelegram.current = false;
-      setWaitingTelegram(true);
+      cancelExternal.current = false;
+      setWaitingFor(provider);
 
-      const ok = await awaitTelegramLogin(nonce, expiresIn, () => cancelTelegram.current);
+      const ok = await awaitExternalLogin(provider, state, expiresIn, () => cancelExternal.current);
       if (ok) {
         await reload();
-      } else if (!cancelTelegram.current) {
+      } else if (!cancelExternal.current) {
         setError('Время на вход истекло. Попробуйте ещё раз.');
       }
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Не удалось открыть Telegram');
+      setError(err instanceof ApiError ? err.message : 'Не удалось открыть страницу входа');
     } finally {
-      setWaitingTelegram(false);
+      setWaitingFor(null);
       setBusy(false);
     }
   }
@@ -144,25 +145,26 @@ export function LoginScreen() {
 
           {step === 'phone' ? (
             <>
-              {waitingTelegram ? (
+              {waitingFor ? (
                 <>
                   <Text style={{ color: theme.inkSoft, fontSize: 15, lineHeight: 22 }}>
-                    Открыли Telegram. Нажмите там «Старт» — и вернитесь сюда, вход произойдёт сам.
+                    {waitingFor === 'yandex'
+                      ? 'Открыли Яндекс. Подтвердите вход и возвращайтесь — дальше всё само.'
+                      : 'Открыли Telegram. Нажмите там «Старт» и возвращайтесь — дальше всё само.'}
                   </Text>
                   <Button
                     title="Отмена"
                     variant="ghost"
                     onPress={() => {
-                      cancelTelegram.current = true;
-                      setWaitingTelegram(false);
+                      cancelExternal.current = true;
+                      setWaitingFor(null);
                     }}
                   />
                 </>
               ) : (
                 <Button
-                  title="Войти через Telegram"
-                  icon="paper-plane"
-                  onPress={() => void telegram()}
+                  title="Войти через Яндекс"
+                  onPress={() => void external('yandex')}
                   loading={busy}
                 />
               )}

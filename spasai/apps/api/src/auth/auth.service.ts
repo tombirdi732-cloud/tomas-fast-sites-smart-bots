@@ -234,6 +234,35 @@ export class AuthService {
     return { ...tokens, user };
   }
 
+  /**
+   * Вход по подтверждённому Яндекс ID. Как и с Telegram, телефона нет —
+   * зато есть почта, её сохраняем: пригодится для чека при онлайн-оплате.
+   */
+  async loginByYandex(
+    yandexId: string,
+    displayName: string | null,
+    email: string | null,
+  ): Promise<TokenPair & { user: User }> {
+    const user = await this.prisma.user.upsert({
+      where: { yandexId },
+      // Имя не перезаписываем: пользователь мог задать своё в профиле.
+      update: email ? { email } : {},
+      create: { yandexId, name: displayName, email, role: UserRole.customer },
+    });
+
+    if (user.isBlocked) {
+      throw new ApiException(
+        HttpStatus.FORBIDDEN,
+        AuthErrorCode.USER_BLOCKED,
+        'Аккаунт заблокирован',
+      );
+    }
+
+    const tokens = await this.issueTokens(user);
+    this.logger.log(`Вход через Яндекс: ${yandexId} (${user.role})`);
+    return { ...tokens, user };
+  }
+
   /** Обновление пары с ротацией: старый refresh отзывается. */
   async refresh(refreshToken: string): Promise<TokenPair> {
     const stored = await this.prisma.refreshToken.findUnique({
