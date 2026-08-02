@@ -5,7 +5,7 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 
-import { api, getApiUrl } from '../api';
+import { api } from '../api';
 import { Button, Card } from '../components';
 import type { RootStackParamList } from '../navigation';
 import { useSession } from '../session';
@@ -181,10 +181,6 @@ export function ProfileScreen() {
         <View style={{ marginTop: 10 }}>
           <Button title="Выйти" variant="ghost" onPress={() => void logout()} />
         </View>
-
-        <Text style={{ color: theme.inkFaint, fontSize: 12, textAlign: 'center' }}>
-          Спасай · {getApiUrl().replace(/^https?:\/\//, '').replace(/\/api$/, '')}
-        </Text>
       </ScrollView>
     </SafeAreaView>
   );
