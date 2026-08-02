@@ -63,6 +63,15 @@ export class CreateMerchantDto {
   @IsArray()
   @IsString({ each: true })
   photos?: string[];
+
+  /**
+   * Код приглашения от платформы. Если указан — заведение уже проверено
+   * вручную и одобряется сразу, без очереди модерации.
+   */
+  @IsOptional()
+  @IsString()
+  @Length(6, 16)
+  inviteCode?: string;
 }
 
 export class UpdateMerchantDto {

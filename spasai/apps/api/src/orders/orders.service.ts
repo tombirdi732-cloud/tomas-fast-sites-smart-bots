@@ -1,11 +1,13 @@
 import { randomInt } from 'node:crypto';
 
 import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Box, BoxStatus, NotificationType, Order, OrderStatus, Prisma } from '@prisma/client';
 
 import { ApiException } from '../common/errors/api-error';
 import { BoxErrorCode, OrderErrorCode } from '../common/errors/error-codes';
 import { calculateOrderAmounts, formatKopecks } from '../common/money';
+import type { Env } from '../config/env';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -30,6 +32,7 @@ export class OrdersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly notifications: NotificationsService,
+    private readonly config: ConfigService<Env, true>,
   ) {}
 
   /**
@@ -102,10 +105,14 @@ export class OrdersService {
 
       const settings = await tx.platformSettings.findUnique({ where: { id: 1 } });
 
+      // Сервисный сбор берётся только при онлайн-оплате: в режиме on_pickup
+      // покупатель платит заведению напрямую, брать с него нечего.
+      const onlinePayments = this.config.get('PAYMENTS_MODE', { infer: true }) === 'online';
+
       const amounts = calculateOrderAmounts({
         price: box.price,
         quantity,
-        serviceFee: settings?.serviceFee ?? 0,
+        serviceFee: onlinePayments ? (settings?.serviceFee ?? 0) : 0,
         commissionRate: Number(merchant.commissionRate),
       });
 
@@ -143,6 +150,29 @@ export class OrdersService {
   }
 
   /**
+   * Бронь без предоплаты (PAYMENTS_MODE=on_pickup): код выдачи выписывается
+   * сразу, покупатель платит на месте. Платформа денег не касается —
+   * ни эквайринга, ни кассы, ни агентской схемы.
+   */
+  async reserveWithoutPayment(orderId: string): Promise<Order> {
+    const order = await this.withPickupCode(orderId, OrderStatus.ready, {});
+    this.logger.log(
+      `Заказ ${orderId} забронирован без предоплаты: ${formatKopecks(order.total)} ₽ на месте, ` +
+        `код ${order.pickupCode ?? '—'}`,
+    );
+
+    await this.notifications.notify({
+      userId: order.userId,
+      type: NotificationType.order_paid,
+      title: 'Бокс забронирован',
+      body: `Код выдачи ${order.pickupCode ?? ''}. Оплата при получении.`,
+      data: { orderId: order.id, type: 'order_reserved' },
+    });
+
+    return order;
+  }
+
+  /**
    * Отметка об оплате: генерируется код выдачи (раздел 7.5 ТЗ).
    * Вызывается вебхуком ЮKassa (этап 6) и dev-эндпоинтом.
    * Идемпотентна: повторный вызов по оплаченному заказу ничего не меняет.
@@ -161,32 +191,43 @@ export class OrdersService {
       );
     }
 
+    const order = await this.withPickupCode(orderId, OrderStatus.paid, {
+      paymentId,
+      paidAt: new Date(),
+    });
+
+    this.logger.log(
+      `Заказ ${orderId} оплачен: ${formatKopecks(order.total)} ₽, код ${order.pickupCode ?? '—'}`,
+    );
+
+    await this.notifications.notify({
+      userId: order.userId,
+      type: NotificationType.order_paid,
+      title: 'Заказ оплачен',
+      body: `Код выдачи ${order.pickupCode ?? ''}. Покажите его на кассе.`,
+      data: { orderId: order.id, type: 'order_paid' },
+    });
+
+    return order;
+  }
+
+  /**
+   * Выписывает шестизначный код выдачи (7.5). Код уникален в рамках заведения
+   * за сутки — на коллизию частичного UNIQUE просто берём следующий.
+   */
+  private async withPickupCode(
+    orderId: string,
+    status: OrderStatus,
+    extra: { paymentId?: string; paidAt?: Date },
+  ): Promise<Order> {
     for (let attempt = 0; attempt < PICKUP_CODE_ATTEMPTS; attempt += 1) {
       const pickupCode = String(randomInt(0, 1_000_000)).padStart(6, '0');
       try {
-        const order = await this.prisma.order.update({
+        return await this.prisma.order.update({
           where: { id: orderId },
-          data: {
-            status: OrderStatus.paid,
-            pickupCode,
-            paymentId,
-            paidAt: new Date(),
-          },
+          data: { status, pickupCode, ...extra },
         });
-
-        this.logger.log(`Заказ ${orderId} оплачен: ${formatKopecks(order.total)} ₽, код ${pickupCode}`);
-
-        await this.notifications.notify({
-          userId: order.userId,
-          type: NotificationType.order_paid,
-          title: 'Заказ оплачен',
-          body: `Код выдачи ${pickupCode}. Покажите его на кассе.`,
-          data: { orderId: order.id, type: 'order_paid' },
-        });
-
-        return order;
       } catch (error) {
-        // Частичный UNIQUE (заведение + код + сутки) — пробуем другой код.
         const isCodeCollision =
           error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002';
         if (!isCodeCollision) throw error;

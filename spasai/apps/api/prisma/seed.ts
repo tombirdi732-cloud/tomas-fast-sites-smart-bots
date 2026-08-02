@@ -1,10 +1,25 @@
 /**
- * Наполнение локальной БД демо-данными.
- * Запуск: npm run db:seed -w @spasai/api
+ * Наполнение ЛОКАЛЬНОЙ БД демо-данными для разработки и демонстраций.
  *
+ * Заведения, боксы и отзывы отсюда — выдумка. В боевой базе их быть не должно:
+ * покупатель не должен увидеть бокс, которого не существует, а заведение —
+ * отзыв, которого никто не оставлял.
+ *
+ * Поэтому скрипт отказывается работать на проде. В deploy/ он и не вызывается:
+ * контейнер api выполняет только `prisma migrate deploy`.
+ *
+ * Запуск: npm run db:seed -w @spasai/api
  * Все суммы — копейки. Все даты пишутся в UTC.
  */
 import { BoxStatus, MerchantStatus, PrismaClient, UserRole } from '@prisma/client';
+
+if (process.env.NODE_ENV === 'production' || process.env.ALLOW_SEED === 'never') {
+  console.error(
+    'Демо-данные нельзя заливать в production: боевая база должна содержать\n' +
+      'только настоящие заведения, прошедшие модерацию.',
+  );
+  process.exit(1);
+}
 
 const prisma = new PrismaClient();
 
@@ -77,6 +92,15 @@ async function main(): Promise<void> {
       commissionRate: 0.18,
     },
   });
+
+  // Доступ к панели даётся через merchant_staff, а не по полю owner_user_id.
+  for (const merchant of [bakery, coffee]) {
+    await prisma.merchantStaff.upsert({
+      where: { merchantId_userId: { merchantId: merchant.id, userId: owner.id } },
+      update: {},
+      create: { merchantId: merchant.id, userId: owner.id, role: 'owner' },
+    });
+  }
 
   const existingBoxes = await prisma.box.count();
   if (existingBoxes === 0) {

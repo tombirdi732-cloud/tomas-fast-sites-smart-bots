@@ -1,22 +1,37 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { Merchant, MerchantStatus, UserRole } from '@prisma/client';
+import { Merchant, MerchantStatus, Prisma, UserRole } from '@prisma/client';
 
 import { ApiException } from '../common/errors/api-error';
 import { MerchantErrorCode } from '../common/errors/error-codes';
 import { PrismaService } from '../prisma/prisma.service';
+import { AccessService } from './access.service';
+import { InnCheckService } from './inn-check.service';
 import { CreateMerchantDto, UpdateMerchantDto } from './merchants.dto';
 
 @Injectable()
 export class MerchantsService {
   private readonly logger = new Logger(MerchantsService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly innCheck: InnCheckService,
+    private readonly access: AccessService,
+  ) {}
 
   /**
    * Заявка на регистрацию заведения. Создаётся в статусе pending —
    * до одобрения администратором продавать нельзя (раздел 6 ТЗ).
    */
   async apply(userId: string, dto: CreateMerchantDto): Promise<Merchant> {
+    // Пришёл по коду — значит, вы уже проверили заведение лично.
+    const invite = dto.inviteCode ? await this.access.requireValidInvite(dto.inviteCode) : null;
+    if (invite?.merchantId) {
+      throw ApiException.badRequest(
+        'INVITE_FOR_STAFF',
+        'Это код для входа сотрудника, а не для регистрации заведения',
+      );
+    }
+
     const existing = await this.prisma.merchant.findUnique({ where: { inn: dto.inn } });
     if (existing) {
       throw new ApiException(
@@ -27,6 +42,9 @@ export class MerchantsService {
     }
 
     const settings = await this.prisma.platformSettings.findUnique({ where: { id: 1 } });
+
+    // Сверяем ИНН с реестром заранее — модератор увидит расхождения сразу.
+    const verification = await this.innCheck.check(dto.inn, dto.legalName);
 
     const merchant = await this.prisma.$transaction(async (tx) => {
       const created = await tx.merchant.create({
@@ -45,11 +63,16 @@ export class MerchantsService {
           logoUrl: dto.logoUrl ?? null,
           photos: dto.photos ?? [],
           commissionRate: settings?.defaultCommissionRate ?? 0.2,
-          status: MerchantStatus.pending,
+          status: invite ? MerchantStatus.approved : MerchantStatus.pending,
+          // Prisma принимает произвольный JSON — структура InnCheck плоская и сериализуемая.
+          verification: verification as unknown as Prisma.InputJsonValue,
         },
       });
 
-      // Владелец заведения получает роль merchant, чтобы попасть в панель.
+      // Владелец получает доступ к панели и роль merchant.
+      await tx.merchantStaff.create({
+        data: { merchantId: created.id, userId, role: 'owner' },
+      });
       await tx.user.update({
         where: { id: userId },
         data: { role: UserRole.merchant },
@@ -58,7 +81,17 @@ export class MerchantsService {
       return created;
     });
 
-    this.logger.log(`Заявка на заведение: ${merchant.title} (ИНН ${merchant.inn})`);
+    if (invite) {
+      await this.access.consumeInvite(invite.id, userId, merchant.id);
+    }
+
+    this.logger.log(
+      `${invite ? 'Заведение по приглашению' : 'Заявка на заведение'}: ` +
+        `${merchant.title} (ИНН ${merchant.inn})` +
+        (verification.checked
+          ? ` · реестр: ${verification.found ? verification.status ?? 'найдена' : 'не найдена'}`
+          : ' · автопроверка выключена'),
+    );
     return merchant;
   }
 
@@ -73,39 +106,17 @@ export class MerchantsService {
     return merchant;
   }
 
-  /** Заведения текущего пользователя (владелец может иметь несколько точек). */
+  /** Заведения, к которым у пользователя есть доступ: свои и те, где он кассир. */
   listMine(userId: string): Promise<Merchant[]> {
-    return this.prisma.merchant.findMany({
-      where: { ownerUserId: userId },
-      orderBy: { createdAt: 'asc' },
-    });
+    return this.access.listAccessible(userId);
   }
 
   /**
    * Заведение, от имени которого работает пользователь.
    * Все эндпоинты /merchants/me/* обязаны проходить через эту проверку.
    */
-  async requireOwned(userId: string, merchantId?: string): Promise<Merchant> {
-    const merchant = merchantId
-      ? await this.prisma.merchant.findUnique({ where: { id: merchantId } })
-      : await this.prisma.merchant.findFirst({
-          where: { ownerUserId: userId },
-          orderBy: { createdAt: 'asc' },
-        });
-
-    if (!merchant) {
-      throw ApiException.notFound('Заведение не найдено');
-    }
-
-    if (merchant.ownerUserId !== userId) {
-      throw new ApiException(
-        403,
-        MerchantErrorCode.NOT_MERCHANT_OWNER,
-        'Это заведение принадлежит другому пользователю',
-      );
-    }
-
-    return merchant;
+  requireOwned(userId: string, merchantId?: string): Promise<Merchant> {
+    return this.access.requireAccess(userId, merchantId);
   }
 
   /** Продавать может только одобренное заведение. */
@@ -121,7 +132,8 @@ export class MerchantsService {
   }
 
   async update(userId: string, merchantId: string, dto: UpdateMerchantDto): Promise<Merchant> {
-    await this.requireOwned(userId, merchantId);
+    // Менять карточку заведения может только владелец, не кассир.
+    await this.access.requireOwner(userId, merchantId);
     return this.prisma.merchant.update({ where: { id: merchantId }, data: { ...dto } });
   }
 

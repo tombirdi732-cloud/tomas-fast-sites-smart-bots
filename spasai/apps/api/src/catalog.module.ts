@@ -4,6 +4,13 @@ import { AdminController } from './admin/admin.controller';
 import { BoxesController, MerchantBoxesController } from './boxes/boxes.controller';
 import { BoxesService } from './boxes/boxes.service';
 import { MerchantsController } from './merchants/merchants.controller';
+import {
+  AdminInvitesController,
+  MerchantJoinController,
+  MerchantStaffController,
+} from './merchants/access.controller';
+import { AccessService } from './merchants/access.service';
+import { InnCheckService } from './merchants/inn-check.service';
 import { MerchantsService } from './merchants/merchants.service';
 import { NotificationsController } from './notifications/notifications.controller';
 import { NotificationsService } from './notifications/notifications.service';
@@ -30,15 +37,27 @@ import { FavoritesController, ReviewsController } from './social/social.controll
     AdminController,
     PaymentsController,
     NotificationsController,
+    AdminInvitesController,
+    MerchantStaffController,
+    MerchantJoinController,
   ],
   providers: [
     MerchantsService,
+    InnCheckService,
+    AccessService,
     BoxesService,
     OrdersService,
     YookassaService,
     NotificationsService,
     SchedulerService,
   ],
-  exports: [MerchantsService, BoxesService, OrdersService, YookassaService, NotificationsService],
+  exports: [
+    MerchantsService,
+    AccessService,
+    BoxesService,
+    OrdersService,
+    YookassaService,
+    NotificationsService,
+  ],
 })
 export class CatalogModule {}

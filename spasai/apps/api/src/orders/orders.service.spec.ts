@@ -21,7 +21,12 @@ interface BoxState {
  * блокировку строки мы здесь не воспроизводим, зато проверяем всю логику
  * пересчёта остатков и статусов, которая внутри неё живёт.
  */
-function makeService(box: Partial<BoxState> = {}, serviceFee = 2_900, commissionRate = 0.2) {
+function makeService(
+  box: Partial<BoxState> = {},
+  serviceFee = 2_900,
+  commissionRate = 0.2,
+  paymentsMode: 'on_pickup' | 'online' = 'online',
+) {
   const state: BoxState = {
     id: 'b1',
     merchantId: 'm1',
@@ -84,9 +89,10 @@ function makeService(box: Partial<BoxState> = {}, serviceFee = 2_900, commission
 
   // Уведомления в этих тестах не проверяются — подставляем заглушку.
   const notifications = { notify: jest.fn(() => Promise.resolve()) };
+  const config = { get: (key: string) => (key === 'PAYMENTS_MODE' ? paymentsMode : undefined) };
 
   return {
-    service: new OrdersService(prisma as never, notifications as never),
+    service: new OrdersService(prisma as never, notifications as never, config as never),
     state,
     prisma,
     client,
@@ -112,6 +118,22 @@ describe('OrdersService.create — резервирование (раздел 7.
     expect(order.serviceFee).toBe(2_900);
     expect(order.status).toBe(OrderStatus.pending_payment);
     expect(state.quantityLeft).toBe(0);
+  });
+
+  it('в режиме брони без предоплаты сервисный сбор не берётся', async () => {
+    const { service } = makeService({}, 2_900, 0.2, 'on_pickup');
+
+    const order = (await service.create('u1', 'b1', 1)) as unknown as {
+      serviceFee: number;
+      total: number;
+      commissionAmount: number;
+    };
+
+    // Покупатель платит заведению напрямую — платформе брать нечего.
+    expect(order.serviceFee).toBe(0);
+    expect(order.total).toBe(29_900);
+    // Комиссия всё равно посчитана: это долг заведения перед платформой.
+    expect(order.commissionAmount).toBe(5_980);
   });
 
   it('переводит бокс в sold_out, когда разобрали последний', async () => {

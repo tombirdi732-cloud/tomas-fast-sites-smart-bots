@@ -89,6 +89,7 @@ model User {
   favorites     Favorite[]
   notifications Notification[]
   refreshTokens RefreshToken[]
+  merchantStaff MerchantStaff[]
 
   @@index([role])
   @@map("users")
@@ -117,6 +118,9 @@ model Merchant {
   status         MerchantStatus @default(pending)
   /// Причина отклонения заявки модератором.
   rejectionReason String?       @map("rejection_reason")
+  /// Результат автопроверки ИНН по реестру ФНС на момент подачи заявки.
+  /// Подсказка модератору, а не основание для автоматического одобрения.
+  verification    Json?
   /// Доля комиссии платформы, 0..1. Не деньги — здесь Decimal уместен.
   commissionRate Decimal        @default(0.20) @map("commission_rate") @db.Decimal(4, 3)
   ratingAvg      Decimal        @default(0) @map("rating_avg") @db.Decimal(3, 2)
@@ -130,6 +134,8 @@ model Merchant {
   reviews   Review[]
   payouts   Payout[]
   favorites Favorite[]
+  staff     MerchantStaff[]
+  invites   MerchantInvite[]
 
   @@unique([inn])
   @@index([ownerUserId])
@@ -299,6 +305,49 @@ model PhoneVerification {
 
   @@index([phone, createdAt])
   @@map("phone_verifications")
+}
+
+/// Кто имеет доступ к панели заведения.
+/// Владелец подаёт заявку, а кассиры добавляются по коду приглашения:
+/// в пекарне не один человек выдаёт заказы.
+model MerchantStaff {
+  id         String   @id @default(uuid()) @db.Uuid
+  merchantId String   @map("merchant_id") @db.Uuid
+  userId     String   @map("user_id") @db.Uuid
+  /// owner — владелец (управляет боксами и сотрудниками),
+  /// staff — кассир (видит заказы и подтверждает выдачу).
+  role       String   @default("staff") @db.VarChar(16)
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  merchant Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([merchantId, userId])
+  @@index([userId])
+  @@map("merchant_staff")
+}
+
+/// Код приглашения.
+/// Без merchantId — приглашение на регистрацию нового заведения: тот, кто
+/// пришёл по коду, уже проверен вручную, поэтому заявка сразу одобряется.
+/// С merchantId — приглашение сотрудника в существующее заведение.
+model MerchantInvite {
+  id           String    @id @default(uuid()) @db.Uuid
+  code         String    @unique @db.VarChar(16)
+  merchantId   String?   @map("merchant_id") @db.Uuid
+  /// Для кого выписан — видно в списке приглашений.
+  note         String?   @db.VarChar(300)
+  createdBy    String    @map("created_by") @db.Uuid
+  expiresAt    DateTime  @map("expires_at") @db.Timestamptz(6)
+  usedAt       DateTime? @map("used_at") @db.Timestamptz(6)
+  usedByUserId String?   @map("used_by_user_id") @db.Uuid
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  merchant Merchant? @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+
+  @@index([merchantId])
+  @@index([expiresAt])
+  @@map("merchant_invites")
 }
 
 /// Выданные refresh-токены. Хранится только HMAC-хэш — по утечке БД

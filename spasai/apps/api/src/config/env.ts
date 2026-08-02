@@ -44,10 +44,22 @@ export const envSchema = z.object({
   /** Сколько раз можно ошибиться в коде, прежде чем он сгорит. */
   SMS_MAX_ATTEMPTS: z.coerce.number().int().positive().default(5),
 
+  /**
+   * Как платит покупатель:
+   *   on_pickup — бронь без предоплаты, деньги остаются между покупателем
+   *               и заведением. Платформа не в денежном потоке: не нужны
+   *               ни эквайринг, ни ККТ, ни агентский договор.
+   *   online    — оплата в приложении через ЮKassa (нужны ИП/ООО и ключи).
+   */
+  PAYMENTS_MODE: z.enum(['on_pickup', 'online']).default('on_pickup'),
+
   /** ЮKassa. Пустые значения выключают приём платежей (этап 6). */
   YOOKASSA_SHOP_ID: z.string().default(''),
   YOOKASSA_SECRET_KEY: z.string().default(''),
   YOOKASSA_RETURN_URL: z.string().default('spasai://payment-result'),
+
+  /** DaData: автопроверка ИНН по реестру ФНС. Пусто — только ручная модерация. */
+  DADATA_TOKEN: z.string().default(''),
 
   /** Firebase Cloud Messaging (этап 7). Пустое значение выключает пуши. */
   FCM_PROJECT_ID: z.string().default(''),
@@ -87,6 +99,14 @@ export function validateEnv(raw: Record<string, unknown>): Env {
     }
     if (parsed.data.AUTH_HASH_SECRET.startsWith('dev-only')) {
       throw new Error('AUTH_HASH_SECRET обязателен при NODE_ENV=production');
+    }
+    if (
+      parsed.data.PAYMENTS_MODE === 'online' &&
+      (!parsed.data.YOOKASSA_SHOP_ID || !parsed.data.YOOKASSA_SECRET_KEY)
+    ) {
+      throw new Error(
+        'PAYMENTS_MODE=online требует ключи ЮKassa, иначе покупатель не сможет заплатить',
+      );
     }
   }
 

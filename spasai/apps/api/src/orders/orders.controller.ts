@@ -24,10 +24,12 @@ import { OrdersService } from './orders.service';
 interface CreateOrderResponse {
   order: Order;
   /**
-   * Ссылка на оплату в ЮKassa. null, если ключи магазина не заданы —
-   * тогда в dev-режиме заказ проводится через POST /orders/:id/pay-dev.
+   * Ссылка на оплату в ЮKassa. null в режиме on_pickup (покупатель платит
+   * на месте) и в dev без ключей магазина.
    */
   paymentUrl: string | null;
+  /** on_pickup — бронь без предоплаты, online — оплата в приложении. */
+  paymentsMode: 'on_pickup' | 'online';
 }
 
 @Controller('orders')
@@ -48,10 +50,20 @@ export class OrdersController {
     @CurrentUser() user: AuthUser,
     @Body() dto: CreateOrderDto,
   ): Promise<CreateOrderResponse> {
+    const mode = this.config.get('PAYMENTS_MODE', { infer: true });
     const order = await this.orders.create(user.id, dto.boxId, dto.quantity);
 
+    // Бронь без предоплаты: код выдачи сразу, деньги — на месте.
+    if (mode === 'on_pickup') {
+      return {
+        order: await this.orders.reserveWithoutPayment(order.id),
+        paymentUrl: null,
+        paymentsMode: mode,
+      };
+    }
+
     if (!this.yookassa.enabled) {
-      return { order, paymentUrl: null };
+      return { order, paymentUrl: null, paymentsMode: mode };
     }
 
     const box = await this.prisma.box.findUniqueOrThrow({
@@ -69,7 +81,7 @@ export class OrdersController {
       data: { paymentId: payment.paymentId },
     });
 
-    return { order, paymentUrl: payment.confirmationUrl };
+    return { order, paymentUrl: payment.confirmationUrl, paymentsMode: mode };
   }
 
   @Get()
