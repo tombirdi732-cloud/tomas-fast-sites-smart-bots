@@ -40,8 +40,16 @@
         "expo-build-properties",
         {
           "android": {
-            "usesCleartextTraffic": true
+            "usesCleartextTraffic": true,
+            "minSdkVersion": 26
           }
+        }
+      ],
+      [
+        "react-native-yamap-plus",
+        {
+          "android_useYandexMapKitLite": true,
+          "ios_useYandexMapKitLite": true
         }
       ]
     ],

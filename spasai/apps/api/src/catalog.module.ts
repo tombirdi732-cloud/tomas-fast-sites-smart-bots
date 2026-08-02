@@ -10,6 +10,7 @@ import {
   MerchantStaffController,
 } from './merchants/access.controller';
 import { AccessService } from './merchants/access.service';
+import { AddressService } from './merchants/address.service';
 import { InnCheckService } from './merchants/inn-check.service';
 import { MerchantsService } from './merchants/merchants.service';
 import { NotificationsController } from './notifications/notifications.controller';
@@ -45,6 +46,7 @@ import { FavoritesController, ReviewsController } from './social/social.controll
     MerchantsService,
     InnCheckService,
     AccessService,
+    AddressService,
     BoxesService,
     OrdersService,
     YookassaService,

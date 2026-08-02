@@ -2,6 +2,8 @@ import { useState } from 'react';
 
 import { ApiError, api } from '../lib/api';
 import type { Merchant } from '../lib/api';
+import { AddressField } from '../components/AddressField';
+import type { PickedAddress } from '../components/AddressField';
 import { Logo } from '../components/Logo';
 import { useSession } from '../lib/session';
 
@@ -104,13 +106,24 @@ function ApplyForm() {
   const { reload } = useSession();
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [address, setAddress] = useState<PickedAddress | null>(null);
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
-    setBusy(true);
 
     const data = new FormData(event.currentTarget);
+
+    // Координаты либо из выбранной подсказки, либо из ручных полей.
+    const lat = address ? address.lat : Number(data.get('lat'));
+    const lng = address ? address.lng : Number(data.get('lng'));
+
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+      setError('Выберите адрес из подсказок — по нему определятся координаты');
+      return;
+    }
+
+    setBusy(true);
     try {
       await api<Merchant>('/merchants', {
         method: 'POST',
@@ -119,8 +132,8 @@ function ApplyForm() {
           description: data.get('description') || undefined,
           category: data.get('category'),
           address: data.get('address'),
-          lat: Number(data.get('lat')),
-          lng: Number(data.get('lng')),
+          lat,
+          lng,
           phone: data.get('phone'),
           inn: data.get('inn'),
           legalName: data.get('legalName'),
@@ -162,21 +175,7 @@ function ApplyForm() {
         </label>
       </div>
 
-      <label className="field">
-        <span>Адрес</span>
-        <input name="address" required placeholder="Москва, ул. Тверская, 1" />
-      </label>
-
-      <div className="grid-2">
-        <label className="field">
-          <span>Широта</span>
-          <input name="lat" type="number" step="any" required placeholder="55.7601" />
-        </label>
-        <label className="field">
-          <span>Долгота</span>
-          <input name="lng" type="number" step="any" required placeholder="37.6089" />
-        </label>
-      </div>
+      <AddressField onPick={setAddress} />
 
       <div className="grid-2">
         <label className="field">
@@ -192,7 +191,12 @@ function ApplyForm() {
       <div className="grid-2">
         <label className="field">
           <span>Часовой пояс</span>
-          <input name="timezone" defaultValue="Europe/Moscow" />
+          {/* key перерисовывает поле, когда адрес принёс другую зону */}
+          <input
+            key={address?.timezone ?? 'default'}
+            name="timezone"
+            defaultValue={address?.timezone ?? 'Europe/Moscow'}
+          />
         </label>
         <label className="field">
           <span>Код от «Спасай» — если есть</span>

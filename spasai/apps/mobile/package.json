@@ -27,7 +27,8 @@
     "react-native": "0.79.6",
     "react-native-safe-area-context": "5.4.0",
     "react-native-screens": "~4.11.1",
-    "react-native-web": "^0.20.0"
+    "react-native-web": "^0.20.0",
+    "react-native-yamap-plus": "^6.10.0"
   },
   "devDependencies": {
     "@types/react": "~19.2.0",

@@ -30,15 +30,23 @@ interface State {
   error: string | null;
 }
 
-/** Лента боксов рядом: координаты устройства + геопоиск на бэкенде. */
-export function useNearbyBoxes(filters: Filters) {
+/**
+ * Лента боксов рядом: координаты устройства + геопоиск на бэкенде.
+ *
+ * `at` перебивает геолокацию — так карта ищет там, куда её увели,
+ * а не там, где стоит телефон.
+ */
+export function useNearbyBoxes(filters: Filters, at?: { lat: number; lng: number } | null) {
   const [state, setState] = useState<State>({
     boxes: [],
-    coords: FALLBACK_COORDS,
+    coords: at ?? FALLBACK_COORDS,
     usingFallback: true,
     loading: true,
     error: null,
   });
+
+  const atLat = at?.lat ?? null;
+  const atLng = at?.lng ?? null;
 
   const load = useCallback(async () => {
     setState((prev) => ({ ...prev, loading: true, error: null }));
@@ -46,17 +54,22 @@ export function useNearbyBoxes(filters: Filters) {
     let coords = FALLBACK_COORDS;
     let usingFallback = true;
 
-    try {
-      const permission = await Location.getForegroundPermissionsAsync();
-      if (permission.granted) {
-        const position = await Location.getCurrentPositionAsync({
-          accuracy: Location.Accuracy.Balanced,
-        });
-        coords = { lat: position.coords.latitude, lng: position.coords.longitude };
-        usingFallback = false;
+    if (atLat !== null && atLng !== null) {
+      coords = { lat: atLat, lng: atLng };
+      usingFallback = false;
+    } else {
+      try {
+        const permission = await Location.getForegroundPermissionsAsync();
+        if (permission.granted) {
+          const position = await Location.getCurrentPositionAsync({
+            accuracy: Location.Accuracy.Balanced,
+          });
+          coords = { lat: position.coords.latitude, lng: position.coords.longitude };
+          usingFallback = false;
+        }
+      } catch {
+        // остаёмся на запасных координатах
       }
-    } catch {
-      // остаёмся на запасных координатах
     }
 
     const params = new URLSearchParams({
@@ -81,7 +94,7 @@ export function useNearbyBoxes(filters: Filters) {
         error: error instanceof ApiError ? error.message : 'Не удалось загрузить ленту',
       });
     }
-  }, [filters.radius, filters.category, filters.maxPrice, filters.favoritesOnly]);
+  }, [filters.radius, filters.category, filters.maxPrice, filters.favoritesOnly, atLat, atLng]);
 
   useEffect(() => {
     void load();

@@ -3,6 +3,8 @@ import { Merchant, UserRole } from '@prisma/client';
 
 import { AuthUser, CurrentUser, Public, Roles } from '../auth/auth.decorators';
 import { PrismaService } from '../prisma/prisma.service';
+import { AddressService } from './address.service';
+import type { AddressSuggestion } from './address.service';
 import { CreateMerchantDto, UpdateMerchantDto } from './merchants.dto';
 import { MerchantsService } from './merchants.service';
 
@@ -22,12 +24,23 @@ export class MerchantsController {
   constructor(
     private readonly merchants: MerchantsService,
     private readonly prisma: PrismaService,
+    private readonly address: AddressService,
   ) {}
 
   /** Заявка на регистрацию заведения — уходит на модерацию. */
   @Post()
   apply(@CurrentUser() user: AuthUser, @Body() dto: CreateMerchantDto): Promise<Merchant> {
     return this.merchants.apply(user.id, dto);
+  }
+
+  /**
+   * Подсказки адреса с координатами: заведение выбирает строку, а широту,
+   * долготу и часовой пояс подставляет панель. Руками координаты не вводят —
+   * на них держится весь геопоиск.
+   */
+  @Get('address-suggest')
+  suggestAddress(@Query('query') query?: string): Promise<AddressSuggestion[]> {
+    return this.address.suggest(query ?? '');
   }
 
   /** Заведения, которыми владеет текущий пользователь. */

@@ -201,6 +201,16 @@ export interface Verification {
   warnings: string[];
 }
 
+/** Подсказка адреса из реестра — вместе с координатами и часовым поясом. */
+export interface AddressSuggestion {
+  value: string;
+  lat: number | null;
+  lng: number | null;
+  precision: 'house' | 'street' | 'city' | 'none';
+  city: string | null;
+  timezone: string | null;
+}
+
 export interface Invite {
   code: string;
   expiresAt: string;

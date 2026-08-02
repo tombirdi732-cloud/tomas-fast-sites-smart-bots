@@ -515,6 +515,43 @@ label.check input {
   flex-wrap: wrap;
 }
 
+/* Подсказки адреса под полем ввода. */
+.suggest {
+  position: absolute;
+  z-index: 20;
+  top: 100%;
+  left: 0;
+  right: 0;
+  margin: 4px 0 0;
+  padding: 6px;
+  list-style: none;
+  background: var(--card);
+  border: 1px solid var(--rule);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.suggest button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  border-radius: 8px;
+  padding: 9px 10px;
+  cursor: pointer;
+}
+
+.suggest button:hover,
+.suggest button:focus-visible {
+  background: var(--green-wash);
+  color: var(--green);
+}
+
 /* ── сообщения ──────────────────────────────────────────────── */
 
 .alert {
