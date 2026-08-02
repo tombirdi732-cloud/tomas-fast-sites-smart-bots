@@ -2,7 +2,7 @@ import { ActivityIndicator, View } from 'react-native';
 import { NavigationContainer, DefaultTheme, DarkTheme } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -36,6 +36,11 @@ const TAB_ICON: Record<keyof TabParamList, [keyof typeof Ionicons.glyphMap, keyo
 
 function Tabs() {
   const theme = useTheme();
+  // Приложение рисуется под системными панелями (edge-to-edge), поэтому
+  // кнопки навигации Android перекрывали бы нижние вкладки. Отступ равен
+  // высоте этой панели: у жестовой навигации он маленький, у кнопочной —
+  // ощутимый, поэтому берём его у системы, а не подбираем константой.
+  const insets = useSafeAreaInsets();
 
   return (
     <Tab.Navigator
@@ -48,9 +53,11 @@ function Tabs() {
         tabBarStyle: {
           backgroundColor: theme.card,
           borderTopColor: theme.rule,
-          height: 74,
+          // 74 — рабочая высота самой панели; отступ системной навигации
+          // прибавляется сверху, иначе кнопки Android перекрывают подписи.
+          height: 74 + insets.bottom,
           paddingTop: 8,
-          paddingBottom: 12,
+          paddingBottom: 12 + insets.bottom,
         },
         tabBarIcon: ({ color, focused }) => {
           const [active, idle] = TAB_ICON[route.name];

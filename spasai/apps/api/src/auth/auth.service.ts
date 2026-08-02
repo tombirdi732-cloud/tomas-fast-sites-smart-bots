@@ -194,8 +194,10 @@ export class AuthService {
     // обычный вход требует код из SMS, а его на такой номер никто не шлёт.
     const phone = `+7900${randomInt(1_000_000, 10_000_000)}`;
 
+    // Имя не подставляем: пользователь задаст его сам в профиле, и нигде
+    // не будет торчать слово «демо».
     const user = await this.prisma.user.create({
-      data: { phone, name: 'Демо', role: UserRole.customer },
+      data: { phone, role: UserRole.customer },
     });
 
     const tokens = await this.issueTokens(user);

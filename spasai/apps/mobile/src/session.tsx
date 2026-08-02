@@ -13,6 +13,8 @@ interface SessionValue {
   onboarded: boolean;
   finishOnboarding: () => void;
   reload: () => Promise<void>;
+  /** Сохранить имя из профиля. */
+  updateName: (name: string) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -51,6 +53,11 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     void AsyncStorage.setItem(ONBOARDED_KEY, 'true');
   }, []);
 
+  const updateName = useCallback(async (name: string) => {
+    const updated = await api<Me>('/auth/me', { method: 'PATCH', body: { name } });
+    setMe(updated);
+  }, []);
+
   const logout = useCallback(async () => {
     const refresh = getRefreshToken();
     if (refresh) {
@@ -65,8 +72,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo<SessionValue>(
-    () => ({ me, ready, onboarded, finishOnboarding, reload, logout }),
-    [me, ready, onboarded, finishOnboarding, reload, logout],
+    () => ({ me, ready, onboarded, finishOnboarding, reload, updateName, logout }),
+    [me, ready, onboarded, finishOnboarding, reload, updateName, logout],
   );
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;

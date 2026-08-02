@@ -1,13 +1,13 @@
 import { useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 
 import type { BoxListItem } from '../api';
 import { Button, Notice } from '../components';
-import { distance, money, pickupWindow, pluralBoxes } from '../format';
+import { distance, money, pickupWindow } from '../format';
 import { MAPKIT_KEY, loadYamap } from '../mapkit';
 import type { RootStackParamList } from '../navigation';
 import { useTheme } from '../theme';
@@ -34,6 +34,9 @@ export function MapScreen() {
   const theme = useTheme();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const yamap = useMemo(() => loadYamap(), []);
+  // Карта идёт во весь экран, под статус-бар — как во всех картах.
+  // Плавающие элементы отступают от него сами.
+  const insets = useSafeAreaInsets();
 
   /** Куда увели карту. null — ищем вокруг пользователя. */
   const [searchAt, setSearchAt] = useState<Coords | null>(null);
@@ -49,22 +52,7 @@ export function MapScreen() {
     boxes.find((box) => box.id === selectedId) ?? boxes[0];
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: theme.bg }} edges={['top']}>
-      <View style={{ padding: 18, paddingBottom: 10 }}>
-        <Text style={{ color: theme.inkFaint, fontSize: 12, letterSpacing: 1 }}>
-          РАДИУС {DEFAULT_FILTERS.radius / 1000} КМ
-        </Text>
-        <Text style={{ color: theme.ink, fontSize: 22, fontWeight: '800' }}>
-          {loading ? 'Ищем…' : `${pluralBoxes(boxes.length)} рядом`}
-        </Text>
-      </View>
-
-      {error && (
-        <View style={{ paddingHorizontal: 18, paddingBottom: 10 }}>
-          <Notice>{error}</Notice>
-        </View>
-      )}
-
+    <SafeAreaView style={{ flex: 1, backgroundColor: theme.bg }} edges={[]}>
       <View style={{ flex: 1 }}>
         {yamap ? (
           <YandexMap
@@ -86,8 +74,21 @@ export function MapScreen() {
           />
         )}
 
+        {error && (
+          <View
+            style={{
+              position: 'absolute',
+              top: insets.top + 12,
+              left: 18,
+              right: 18,
+            }}
+          >
+            <Notice>{error}</Notice>
+          </View>
+        )}
+
         {loading && (
-          <View style={{ position: 'absolute', top: 14, alignSelf: 'center' }}>
+          <View style={{ position: 'absolute', top: insets.top + 14, alignSelf: 'center' }}>
             <ActivityIndicator color={theme.green} />
           </View>
         )}
@@ -98,7 +99,7 @@ export function MapScreen() {
             onPress={() => setSearchAt(cameraAt)}
             style={{
               position: 'absolute',
-              top: 14,
+              top: insets.top + 14,
               alignSelf: 'center',
               flexDirection: 'row',
               alignItems: 'center',
@@ -153,6 +154,7 @@ export function MapScreen() {
           <Notice>Схема вместо карты: не задан ключ MapKit</Notice>
         </View>
       )}
+
 
       {selected && (
         <View
