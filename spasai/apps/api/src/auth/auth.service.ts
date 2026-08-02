@@ -187,7 +187,7 @@ export class AuthService {
       throw new ApiException(
         HttpStatus.FORBIDDEN,
         AuthErrorCode.DEMO_LOGIN_DISABLED,
-        'Демо-вход выключен. Войдите по номеру телефона.',
+        'Демо-вход выключен. Войдите через Яндекс.',
       );
     }
 
