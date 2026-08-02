@@ -204,10 +204,16 @@ cd spasai && docker compose -f deploy/docker-compose.prod.yml --env-file deploy/
 |---|---|---|
 | ЮKassa | кабинет магазина | `YOOKASSA_SHOP_ID`, `YOOKASSA_SECRET_KEY` |
 | Вебхук ЮKassa | кабинет → уведомления | `https://ваш-домен/api/webhooks/yookassa`, события `payment.succeeded`, `payment.canceled`, `refund.succeeded` |
+| Вход через Telegram | @BotFather → `/newbot` | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_BOT_USERNAME`, плюс `PUBLIC_API_URL` |
 | SMS | кабинет sms.ru или smsc.ru | `SMS_PROVIDER` + ключи; имя отправителя согласуется заранее |
 | Пуши | Firebase → сервисный аккаунт | `FCM_PROJECT_ID`, `FCM_CLIENT_EMAIL`, `FCM_PRIVATE_KEY` |
 | Карты | кабинет Яндекс.Карт | ключ MapKit для мобильного приложения |
 | Sentry | sentry.io | `SENTRY_DSN` |
+
+**`PUBLIC_API_URL` обязателен для входа через Telegram.** По этому адресу
+бот сообщает серверу о нажатии «Старт»; без переменной вебхук не
+регистрируется, и вход молча не работает. В логе при старте видно
+«Вебхук Telegram зарегистрирован» — если строки нет, смотрите на неё.
 
 **Пока SMS не подключены.** Сервер стартует и без ключей провайдера, но
 вход по номеру работать не будет: код просто некому отправить. На это время
