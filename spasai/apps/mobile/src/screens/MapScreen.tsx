@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { forwardRef, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, PixelRatio, Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -31,6 +31,12 @@ interface Place {
 
 /** Насколько далеко надо увести карту, чтобы предложить поиск заново. */
 const RESEARCH_DISTANCE_M = 700;
+
+/**
+ * Если ближайшее заведение дальше этого, карта вокруг пользователя пуста —
+ * толку от неё никакого. Один раз переводим камеру на ближайшую булавку.
+ */
+const FAR_AWAY_M = 3_000;
 
 /**
  * Булавки нарисованы картинкой: MapKit снимает растр с иконки, и вёрстка
@@ -66,6 +72,7 @@ export function MapScreen() {
   const [cameraAt, setCameraAt] = useState<Coords | null>(null);
   /** Карточка снизу появляется только после нажатия на булавку. */
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const map = useRef<MapHandle>(null);
 
   const { boxes, coords, loading, error } = useNearbyBoxes(DEFAULT_FILTERS, searchAt);
 
@@ -79,6 +86,7 @@ export function MapScreen() {
       <View style={{ flex: 1 }}>
         {yamap ? (
           <YandexMap
+            ref={map}
             yamap={yamap}
             theme={theme}
             places={places}
@@ -148,6 +156,7 @@ export function MapScreen() {
             onPress={() => {
               setSearchAt(null);
               setCameraAt(null);
+              map.current?.setCenter({ lat: coords.lat, lon: coords.lng }, 13.5);
             }}
             style={{
               position: 'absolute',
@@ -260,24 +269,39 @@ interface MapProps {
   onSelect: (id: string) => void;
 }
 
+/** То, что экран умеет попросить у карты. */
+interface MapHandle {
+  setCenter: (point: { lat: number; lon: number }, zoom?: number) => void;
+}
+
 /** Подложка Яндекс.Карт с булавками заведений. */
-function YandexMap({
-  yamap,
-  theme,
-  places,
-  center,
-  selectedId,
-  onCameraMove,
-  onSelect,
-}: MapProps & {
-  yamap: NonNullable<ReturnType<typeof loadYamap>>;
-  onCameraMove: (coords: Coords) => void;
-}) {
+const YandexMap = forwardRef<
+  MapHandle,
+  MapProps & {
+    yamap: NonNullable<ReturnType<typeof loadYamap>>;
+    onCameraMove: (coords: Coords) => void;
+  }
+>(function YandexMap({ yamap, theme, places, center, selectedId, onCameraMove, onSelect }, ref) {
   const { Yamap, Marker } = yamap;
   const initial = useRef({ lat: center.lat, lon: center.lng, zoom: 13.5 }).current;
 
+  // Вокруг пользователя пусто, а ближайший бокс — в соседнем городе:
+  // показываем его, иначе экран остаётся пустой картой. Делаем это один
+  // раз, чтобы не выдёргивать карту у пользователя из-под пальца.
+  const nearest = places[0];
+  const moved = useRef(false);
+  useEffect(() => {
+    if (moved.current || !nearest || nearest.distanceM <= FAR_AWAY_M) return;
+    moved.current = true;
+    (ref as React.RefObject<MapHandle | null>)?.current?.setCenter(
+      { lat: nearest.lat, lon: nearest.lng },
+      12,
+    );
+  }, [nearest, ref]);
+
   return (
     <Yamap
+      ref={ref}
       style={{ flex: 1 }}
       initialRegion={initial}
       showUserPosition
@@ -306,7 +330,7 @@ function YandexMap({
       })}
     </Yamap>
   );
-}
+});
 
 /** Запасной план местности: работает без ключа MapKit и на вебе. */
 function SchematicMap({ theme, places, center, selectedId, onSelect }: MapProps) {
