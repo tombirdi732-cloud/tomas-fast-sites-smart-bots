@@ -31,7 +31,7 @@ export function ReviewScreen({ route, navigation }: ScreenProps<'Review'>) {
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: theme.paper, padding: 18, gap: 18 }}>
+    <View style={{ flex: 1, backgroundColor: theme.bg, padding: 18, gap: 18 }}>
       {error && <Notice>{error}</Notice>}
 
       <Text style={{ color: theme.ink, fontSize: 22, fontWeight: '800' }}>

@@ -53,7 +53,7 @@ export function CheckoutScreen({ route, navigation }: ScreenProps<'Checkout'>) {
 
   if (!box) {
     return (
-      <View style={{ flex: 1, backgroundColor: theme.paper, justifyContent: 'center' }}>
+      <View style={{ flex: 1, backgroundColor: theme.bg, justifyContent: 'center' }}>
         {error ? (
           <View style={{ padding: 18 }}>
             <Notice>{error}</Notice>
@@ -72,7 +72,7 @@ export function CheckoutScreen({ route, navigation }: ScreenProps<'Checkout'>) {
   ).toISOString();
 
   return (
-    <View style={{ flex: 1, backgroundColor: theme.paper }}>
+    <View style={{ flex: 1, backgroundColor: theme.bg }}>
       <ScrollView contentContainerStyle={{ padding: 18, gap: 16 }}>
         {error && <Notice>{error}</Notice>}
 

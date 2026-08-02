@@ -42,7 +42,7 @@ export function ProfileScreen() {
   const kilograms = (boxesSaved * 0.7).toFixed(1).replace('.', ',');
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: theme.paper }} edges={['top']}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: theme.bg }} edges={['top']}>
       <ScrollView contentContainerStyle={{ padding: 18, gap: 16 }}>
         <View>
           <Text style={{ color: theme.inkFaint, fontSize: 12, letterSpacing: 1 }}>ПРОФИЛЬ</Text>

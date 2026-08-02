@@ -56,7 +56,7 @@ export function MapScreen() {
     boxes.find((box) => box.id === selectedId) ?? boxes[0];
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: theme.paper }} edges={['top']}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: theme.bg }} edges={['top']}>
       <View style={{ padding: 18, paddingBottom: 10 }}>
         <Text style={{ color: theme.inkFaint, fontSize: 12, letterSpacing: 1 }}>РАДИУС 3 КМ</Text>
         <Text style={{ color: theme.ink, fontSize: 22, fontWeight: '800' }}>
@@ -131,11 +131,11 @@ export function MapScreen() {
                 paddingVertical: 5,
                 borderRadius: 999,
                 borderWidth: 1,
-                borderColor: active ? theme.sticker : theme.ink,
-                backgroundColor: active ? theme.sticker : theme.card,
+                borderColor: active ? theme.green : theme.ink,
+                backgroundColor: active ? theme.green : theme.card,
               }}
             >
-              <Text style={{ color: active ? theme.stickerInk : theme.ink, fontWeight: '700' }}>
+              <Text style={{ color: active ? '#FFFFFF' : theme.ink, fontWeight: '700' }}>
                 {money(pin.box.price)}
               </Text>
             </Pressable>

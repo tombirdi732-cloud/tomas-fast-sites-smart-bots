@@ -183,3 +183,26 @@ export interface Me {
   phone: string;
   name: string | null;
 }
+
+export interface Favorite {
+  id: string;
+  merchantId: string;
+  merchant?: { id: string; title: string; address: string; logoUrl: string | null };
+}
+
+export interface Notification {
+  id: string;
+  type: string;
+  title: string;
+  body: string;
+  isRead: boolean;
+  createdAt: string;
+}
+
+export interface Review {
+  id: string;
+  rating: number;
+  comment: string | null;
+  reply: string | null;
+  createdAt: string;
+}

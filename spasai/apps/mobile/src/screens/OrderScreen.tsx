@@ -51,7 +51,7 @@ export function OrderScreen({ route, navigation }: ScreenProps<'Order'>) {
 
   if (!order) {
     return (
-      <View style={{ flex: 1, backgroundColor: theme.paper, justifyContent: 'center' }}>
+      <View style={{ flex: 1, backgroundColor: theme.bg, justifyContent: 'center' }}>
         {error ? (
           <View style={{ padding: 18 }}>
             <Notice>{error}</Notice>
@@ -68,7 +68,7 @@ export function OrderScreen({ route, navigation }: ScreenProps<'Order'>) {
 
   return (
     <ScrollView
-      style={{ flex: 1, backgroundColor: theme.paper }}
+      style={{ flex: 1, backgroundColor: theme.bg }}
       contentContainerStyle={{ padding: 18, gap: 16 }}
     >
       {error && <Notice>{error}</Notice>}
@@ -83,14 +83,14 @@ export function OrderScreen({ route, navigation }: ScreenProps<'Order'>) {
       </View>
 
       {active && order.pickupCode ? (
-        <View style={{ backgroundColor: theme.sticker, borderRadius: 18, padding: 22, alignItems: 'center', gap: 10 }}>
-          <Text style={{ color: theme.stickerInk, opacity: 0.7, letterSpacing: 3, fontSize: 12, fontWeight: '600' }}>
+        <View style={{ backgroundColor: theme.green, borderRadius: 18, padding: 22, alignItems: 'center', gap: 10 }}>
+          <Text style={{ color: '#FFFFFF', opacity: 0.7, letterSpacing: 3, fontSize: 12, fontWeight: '600' }}>
             КОД ВЫДАЧИ
           </Text>
-          <Text style={{ color: theme.stickerInk, fontSize: 46, fontWeight: '800', letterSpacing: 6 }}>
+          <Text style={{ color: '#FFFFFF', fontSize: 46, fontWeight: '800', letterSpacing: 6 }}>
             {order.pickupCode.slice(0, 3)} {order.pickupCode.slice(3)}
           </Text>
-          <Text style={{ color: theme.stickerInk, opacity: 0.8, textAlign: 'center', fontSize: 13 }}>
+          <Text style={{ color: '#FFFFFF', opacity: 0.8, textAlign: 'center', fontSize: 13 }}>
             Назовите код на кассе — сотрудник введёт его в панели заведения
           </Text>
         </View>
@@ -105,7 +105,7 @@ export function OrderScreen({ route, navigation }: ScreenProps<'Order'>) {
       {active && order.box && (
         <View
           style={{
-            backgroundColor: theme.emberWash,
+            backgroundColor: '#FFF4E0',
             borderRadius: 14,
             padding: 14,
             flexDirection: 'row',
@@ -114,7 +114,7 @@ export function OrderScreen({ route, navigation }: ScreenProps<'Order'>) {
             gap: 10,
           }}
         >
-          <Text style={{ color: theme.ember, fontSize: 24, fontWeight: '800' }}>
+          <Text style={{ color: theme.soon, fontSize: 24, fontWeight: '800' }}>
             {countdown(order.box.pickupEnd, now)}
           </Text>
           <Text style={{ color: theme.inkSoft, fontSize: 13 }}>до конца окна выдачи</Text>

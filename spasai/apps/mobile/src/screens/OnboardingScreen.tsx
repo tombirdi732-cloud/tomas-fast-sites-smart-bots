@@ -44,18 +44,18 @@ export function OnboardingScreen() {
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: theme.paper }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: theme.bg }}>
       <View style={{ flex: 1, padding: 24, gap: 28, justifyContent: 'center' }}>
         <View
           style={{
             alignSelf: 'flex-start',
-            backgroundColor: theme.sticker,
+            backgroundColor: theme.green,
             paddingHorizontal: 14,
             paddingVertical: 6,
             transform: [{ rotate: '-4deg' }],
           }}
         >
-          <Text style={{ color: theme.stickerInk, fontSize: 30, fontWeight: '800', letterSpacing: 1 }}>
+          <Text style={{ color: '#FFFFFF', fontSize: 30, fontWeight: '800', letterSpacing: 1 }}>
             {slide.word}
           </Text>
         </View>

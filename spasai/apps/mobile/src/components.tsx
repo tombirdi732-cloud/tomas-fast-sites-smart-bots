@@ -1,26 +1,22 @@
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import type { ReactNode } from 'react';
+import { Ionicons } from '@expo/vector-icons';
 
 import type { BoxListItem } from './api';
-import { bestBeforeLabel, distance, money, pickupWindow } from './format';
-import { useTheme } from './theme';
+import { distance, money } from './format';
+import { shelfLife, useTheme } from './theme';
 import type { Theme } from './theme';
 
-/** Цветная подложка вместо фото: у боксов на старте картинок нет. */
-const SHELF_COLORS: Record<string, [string, string]> = {
-  bakery: ['#C98A3F', '#8A4F21'],
-  coffee: ['#7D6A5B', '#3F3229'],
-  kitchen: ['#6F7F4A', '#38452A'],
-  restaurant: ['#8A5A4A', '#472B23'],
-  grocery: ['#4F7A72', '#24413D'],
-};
-
-const CATEGORY_WORD: Record<string, string> = {
-  bakery: 'ВЫПЕЧКА',
-  coffee: 'КОФЕЙНЯ',
-  kitchen: 'КУЛИНАРИЯ',
-  restaurant: 'КУХНЯ',
-  grocery: 'ПРОДУКТЫ',
+/**
+ * Пока у бокса нет фотографии, показываем спокойную заглушку с иконкой
+ * категории — она не притворяется едой и не ломает вёрстку.
+ */
+const CATEGORY_ICON: Record<string, keyof typeof Ionicons.glyphMap> = {
+  bakery: 'cafe-outline',
+  coffee: 'cafe-outline',
+  kitchen: 'restaurant-outline',
+  restaurant: 'restaurant-outline',
+  grocery: 'basket-outline',
 };
 
 export function Button({
@@ -29,44 +25,57 @@ export function Button({
   variant = 'solid',
   disabled,
   loading,
+  icon,
+  size = 'large',
 }: {
   title: string;
   onPress: () => void;
-  variant?: 'solid' | 'ghost';
+  variant?: 'solid' | 'ghost' | 'quiet';
   disabled?: boolean;
   loading?: boolean;
+  icon?: keyof typeof Ionicons.glyphMap;
+  size?: 'large' | 'small';
 }) {
   const theme = useTheme();
-  const ghost = variant === 'ghost';
+  const solid = variant === 'solid';
+  const quiet = variant === 'quiet';
+
+  const background = solid ? theme.green : quiet ? theme.cardSunk : 'transparent';
+  const foreground = solid ? '#FFFFFF' : theme.ink;
 
   return (
     <Pressable
       onPress={onPress}
       disabled={disabled || loading}
-      style={({ pressed }) => [
-        {
-          backgroundColor: ghost ? 'transparent' : theme.ink,
-          borderColor: ghost ? theme.rule : theme.ink,
-          borderWidth: 1,
-          borderRadius: 14,
-          paddingVertical: 15,
-          alignItems: 'center',
-          opacity: disabled ? 0.45 : pressed ? 0.85 : 1,
-        },
-      ]}
+      style={({ pressed }) => ({
+        backgroundColor: background,
+        borderColor: variant === 'ghost' ? theme.rule : background,
+        borderWidth: 1,
+        borderRadius: size === 'large' ? 16 : 12,
+        paddingVertical: size === 'large' ? 16 : 10,
+        paddingHorizontal: size === 'large' ? 20 : 16,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 8,
+        opacity: disabled ? 0.45 : pressed ? 0.85 : 1,
+      })}
     >
       {loading ? (
-        <ActivityIndicator color={ghost ? theme.ink : theme.paper} />
+        <ActivityIndicator color={foreground} />
       ) : (
-        <Text
-          style={{
-            color: ghost ? theme.ink : theme.paper,
-            fontSize: 16,
-            fontWeight: '600',
-          }}
-        >
-          {title}
-        </Text>
+        <>
+          {icon && <Ionicons name={icon} size={size === 'large' ? 19 : 16} color={foreground} />}
+          <Text
+            style={{
+              color: foreground,
+              fontSize: size === 'large' ? 16 : 14,
+              fontWeight: '700',
+            }}
+          >
+            {title}
+          </Text>
+        </>
       )}
     </Pressable>
   );
@@ -75,18 +84,7 @@ export function Button({
 export function Card({ children, style }: { children: ReactNode; style?: object }) {
   const theme = useTheme();
   return (
-    <View
-      style={[
-        {
-          backgroundColor: theme.card,
-          borderColor: theme.rule,
-          borderWidth: 1,
-          borderRadius: 16,
-          padding: 16,
-        },
-        style,
-      ]}
-    >
+    <View style={[{ backgroundColor: theme.card, borderRadius: 18, padding: 16 }, style]}>
       {children}
     </View>
   );
@@ -104,60 +102,155 @@ export function Notice({
   return (
     <View
       style={{
-        backgroundColor: good ? theme.greenWash : theme.emberWash,
+        backgroundColor: good ? theme.greenWash : '#FFF4E0',
         borderRadius: 14,
         padding: 14,
+        flexDirection: 'row',
+        gap: 10,
       }}
     >
-      <Text style={{ color: theme.ink, lineHeight: 20 }}>{children}</Text>
+      <Ionicons
+        name={good ? 'checkmark-circle' : 'alert-circle'}
+        size={19}
+        color={good ? theme.green : theme.soon}
+        style={{ marginTop: 1 }}
+      />
+      <Text style={{ color: theme.ink, lineHeight: 20, flex: 1 }}>{children}</Text>
     </View>
   );
 }
 
-/** Карточка бокса в ленте. */
-export function BoxCard({ box, onPress }: { box: BoxListItem; onPress: () => void }) {
+/** Плашка «сколько осталось до конца срока годности». */
+export function ShelfBadge({ bestBefore, small }: { bestBefore: string; small?: boolean }) {
   const theme = useTheme();
-  const styles = makeStyles(theme);
-  const colors = SHELF_COLORS[box.category] ?? SHELF_COLORS.bakery!;
+  const life = shelfLife(bestBefore);
 
   return (
-    <Pressable onPress={onPress} style={({ pressed }) => [styles.card, { opacity: pressed ? 0.9 : 1 }]}>
-      <View style={[styles.shelf, { backgroundColor: colors[1] }]}>
-        <View style={[styles.shelfTint, { backgroundColor: colors[0] }]} />
-        <Text style={styles.shelfWord}>{CATEGORY_WORD[box.category] ?? 'БОКС'}</Text>
+    <View
+      style={{
+        backgroundColor: theme[life.color],
+        borderRadius: 999,
+        paddingHorizontal: small ? 8 : 10,
+        paddingVertical: small ? 3 : 4,
+        alignSelf: 'flex-start',
+      }}
+    >
+      <Text style={{ color: theme.badgeInk, fontSize: small ? 11 : 12, fontWeight: '700' }}>
+        {life.label}
+      </Text>
+    </View>
+  );
+}
 
-        <View style={styles.sticker}>
-          <Text style={styles.stickerText}>−{box.discountPercent}%</Text>
-        </View>
+/** Оранжевая плашка со скидкой: −57%. */
+export function DiscountBadge({ percent, small }: { percent: number; small?: boolean }) {
+  const theme = useTheme();
+  if (percent <= 0) return null;
 
-        <View style={styles.left}>
-          <Text style={styles.leftText}>Осталось {box.quantityLeft}</Text>
-        </View>
-      </View>
+  return (
+    <View
+      style={{
+        backgroundColor: theme.discount,
+        borderRadius: 8,
+        paddingHorizontal: small ? 6 : 8,
+        paddingVertical: small ? 2 : 4,
+      }}
+    >
+      <Text style={{ color: '#FFFFFF', fontSize: small ? 12 : 13, fontWeight: '700' }}>
+        −{percent}%
+      </Text>
+    </View>
+  );
+}
 
-      <View style={{ padding: 14, gap: 7 }}>
-        <View style={{ flexDirection: 'row', gap: 7, alignItems: 'center' }}>
-          <Text style={styles.merchant} numberOfLines={1}>
-            {box.merchant.title}
-          </Text>
-          {box.merchant.ratingCount > 0 && (
-            <Text style={styles.rating}>{box.merchant.ratingAvg.toFixed(1)}</Text>
+/** Фото бокса или заглушка с иконкой категории. */
+export function BoxPhoto({
+  box,
+  style,
+  iconSize = 34,
+}: {
+  box: Pick<BoxListItem, 'photoUrl' | 'category'>;
+  style?: object;
+  iconSize?: number;
+}) {
+  const theme = useTheme();
+
+  if (box.photoUrl) {
+    return <Image source={{ uri: box.photoUrl }} style={style} resizeMode="cover" />;
+  }
+
+  return (
+    <View style={[{ backgroundColor: theme.cardSunk, alignItems: 'center', justifyContent: 'center' }, style]}>
+      <Ionicons
+        name={CATEGORY_ICON[box.category] ?? 'fast-food-outline'}
+        size={iconSize}
+        color={theme.inkFaint}
+      />
+    </View>
+  );
+}
+
+/**
+ * Карточка бокса в ленте: фото слева, содержимое справа,
+ * плашка срока сверху, зелёная кнопка покупки снизу.
+ */
+export function BoxCard({
+  box,
+  onPress,
+  onToggleFavorite,
+  isFavorite,
+}: {
+  box: BoxListItem;
+  onPress: () => void;
+  onToggleFavorite?: () => void;
+  isFavorite?: boolean;
+}) {
+  const theme = useTheme();
+  const styles = makeStyles(theme);
+
+  return (
+    <Pressable onPress={onPress} style={({ pressed }) => [styles.card, { opacity: pressed ? 0.95 : 1 }]}>
+      <BoxPhoto box={box} style={styles.photo} />
+
+      <View style={styles.body}>
+        <View style={styles.topRow}>
+          <ShelfBadge bestBefore={box.bestBefore} small />
+          {onToggleFavorite && (
+            <Pressable onPress={onToggleFavorite} hitSlop={10}>
+              <Ionicons
+                name={isFavorite ? 'heart' : 'heart-outline'}
+                size={21}
+                color={isFavorite ? theme.urgent : theme.inkFaint}
+              />
+            </Pressable>
           )}
         </View>
 
-        <Text style={styles.title}>{box.title}</Text>
+        <Text style={styles.title} numberOfLines={1}>
+          {box.title}
+        </Text>
+        <Text style={styles.merchant} numberOfLines={1}>
+          {box.merchant.title}
+        </Text>
 
-        <View style={{ flexDirection: 'row', gap: 12, flexWrap: 'wrap' }}>
-          <Text style={styles.meta}>{distance(box.distanceM)}</Text>
-          <Text style={styles.meta}>{bestBeforeLabel(box.bestBefore)}</Text>
+        <View style={styles.priceRow}>
+          <Text style={styles.was}>{money(box.originalPrice)}</Text>
+          <Text style={styles.now}>{money(box.price)}</Text>
+          <DiscountBadge percent={box.discountPercent} small />
         </View>
 
-        <View style={styles.foot}>
-          <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 8 }}>
-            <Text style={styles.price}>{money(box.price)}</Text>
-            <Text style={styles.was}>{money(box.originalPrice)}</Text>
+        <View style={styles.bottomRow}>
+          <View style={styles.distance}>
+            <Ionicons name="location-outline" size={15} color={theme.inkSoft} />
+            <Text style={styles.distanceText}>{distance(box.distanceM)}</Text>
           </View>
-          <Text style={styles.window}>{pickupWindow(box.pickupStart, box.pickupEnd)}</Text>
+
+          <Pressable
+            onPress={onPress}
+            style={({ pressed }) => [styles.buy, { opacity: pressed ? 0.85 : 1 }]}
+          >
+            <Text style={styles.buyText}>Купить</Text>
+          </Pressable>
         </View>
       </View>
     </Pressable>
@@ -167,53 +260,34 @@ export function BoxCard({ box, onPress }: { box: BoxListItem; onPress: () => voi
 function makeStyles(theme: Theme) {
   return StyleSheet.create({
     card: {
+      flexDirection: 'row',
       backgroundColor: theme.card,
-      borderColor: theme.rule,
-      borderWidth: 1,
       borderRadius: 18,
       overflow: 'hidden',
     },
-    shelf: { aspectRatio: 16 / 9, justifyContent: 'center', alignItems: 'center' },
-    shelfTint: { ...StyleSheet.absoluteFillObject, opacity: 0.55 },
-    shelfWord: {
-      color: 'rgba(255,255,255,0.85)',
-      fontSize: 34,
-      fontWeight: '800',
-      letterSpacing: 2,
-    },
-    sticker: {
-      position: 'absolute',
-      top: 12,
-      right: 12,
-      backgroundColor: theme.sticker,
-      paddingHorizontal: 10,
-      paddingVertical: 4,
-      transform: [{ rotate: '-6deg' }],
-    },
-    stickerText: { color: theme.stickerInk, fontWeight: '800', fontSize: 16 },
-    left: {
-      position: 'absolute',
-      left: 12,
-      bottom: 12,
-      backgroundColor: 'rgba(20,20,16,0.74)',
-      paddingHorizontal: 9,
-      paddingVertical: 4,
-      borderRadius: 999,
-    },
-    leftText: { color: '#fff', fontSize: 12, fontWeight: '500' },
-    merchant: { color: theme.inkSoft, fontSize: 13, flexShrink: 1 },
-    rating: { color: theme.ink, fontSize: 13, fontWeight: '700' },
-    title: { color: theme.ink, fontSize: 16, fontWeight: '700', lineHeight: 21 },
-    meta: { color: theme.inkSoft, fontSize: 13 },
-    foot: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'flex-end',
-      gap: 10,
-      marginTop: 2,
-    },
-    price: { color: theme.ink, fontSize: 26, fontWeight: '800' },
+    photo: { width: 118, alignSelf: 'stretch' },
+    body: { flex: 1, padding: 12, gap: 3, minWidth: 0 },
+    topRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+    title: { color: theme.ink, fontSize: 16, fontWeight: '700', marginTop: 3 },
+    merchant: { color: theme.inkSoft, fontSize: 13 },
+    priceRow: { flexDirection: 'row', alignItems: 'center', gap: 7, marginTop: 4, flexWrap: 'wrap' },
     was: { color: theme.inkFaint, fontSize: 14, textDecorationLine: 'line-through' },
-    window: { color: theme.ink, fontSize: 14, fontWeight: '600' },
+    now: { color: theme.green, fontSize: 19, fontWeight: '800' },
+    bottomRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: 8,
+      marginTop: 8,
+    },
+    distance: { flexDirection: 'row', alignItems: 'center', gap: 3 },
+    distanceText: { color: theme.inkSoft, fontSize: 13 },
+    buy: {
+      backgroundColor: theme.green,
+      borderRadius: 12,
+      paddingVertical: 9,
+      paddingHorizontal: 22,
+    },
+    buyText: { color: '#FFFFFF', fontSize: 14, fontWeight: '700' },
   });
 }

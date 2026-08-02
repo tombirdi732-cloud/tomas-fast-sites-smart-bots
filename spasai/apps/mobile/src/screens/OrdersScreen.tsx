@@ -38,7 +38,7 @@ export function OrdersScreen() {
   );
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: theme.paper }} edges={['top']}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: theme.bg }} edges={['top']}>
       <View style={{ padding: 18, paddingBottom: 8 }}>
         <Text style={{ color: theme.ink, fontSize: 22, fontWeight: '800' }}>Мои заказы</Text>
       </View>
