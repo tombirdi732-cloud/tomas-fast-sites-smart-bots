@@ -48,6 +48,28 @@ export function LoginPage() {
     }
   }
 
+  /**
+   * Вход без номера и кода. Нужен, пока не подключены SMS: иначе в панель
+   * не попасть вообще. Аккаунт заводит сервер и только новый — чужой
+   * этим ходом не открыть. Работает лишь при DEMO_LOGIN=true.
+   */
+  async function demo() {
+    setError(null);
+    setBusy(true);
+    try {
+      const result = await api<VerifyResponse>('/auth/demo', {
+        method: 'POST',
+        auth: false,
+      });
+      tokens.save(result.accessToken, result.refreshToken);
+      await reload();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Не удалось войти без кода');
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function verify(event: React.FormEvent) {
     event.preventDefault();
     setError(null);
@@ -93,6 +115,16 @@ export function LoginPage() {
             </button>
             <p className="muted" style={{ margin: 0, fontSize: '0.85rem' }}>
               Код можно запросить не чаще одного раза в минуту.
+            </p>
+
+            <hr style={{ border: 0, borderTop: '1px solid var(--rule)', margin: '4px 0' }} />
+
+            <button className="btn btn--ghost" type="button" onClick={() => void demo()} disabled={busy}>
+              Войти без кода
+            </button>
+            <p className="muted" style={{ margin: 0, fontSize: '0.85rem' }}>
+              Временный вход, пока не подключена рассылка SMS. Выключается на сервере
+              флагом <code>DEMO_LOGIN</code>.
             </p>
           </form>
         ) : (
