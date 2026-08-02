@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 
 import { ApiError, api } from '../lib/api';
 import type { Box } from '../lib/api';
-import { BOX_STATUS_LABEL, money, pickupWindow, toKopecks } from '../lib/format';
+import { BOX_STATUS_LABEL, dateTime, money, pickupWindow, shelfLife, toKopecks } from '../lib/format';
 import { useSession } from '../lib/session';
 
 /**
@@ -235,13 +235,7 @@ export function BoxesPage() {
                   </td>
                   <td>{pickupWindow(box.pickupStart, box.pickupEnd, merchant.timezone)}</td>
                   <td>
-                    {new Date(box.bestBefore).toLocaleString('ru-RU', {
-                      timeZone: merchant.timezone,
-                      day: 'numeric',
-                      month: 'short',
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    })}
+                    <BestBefore iso={box.bestBefore} timeZone={merchant.timezone} />
                   </td>
                   <td>
                     <span className={`pill pill--${box.status}`}>
@@ -265,6 +259,19 @@ export function BoxesPage() {
           </table>
         </div>
       )}
+    </>
+  );
+}
+
+/** Срок годности: дата и сколько до неё осталось — тем же цветом, что в приложении. */
+function BestBefore({ iso, timeZone }: { iso: string; timeZone: string }) {
+  const shelf = shelfLife(iso);
+  return (
+    <>
+      <div>{dateTime(iso, timeZone)}</div>
+      <span className={`shelf shelf--${shelf.tone}`} style={{ marginTop: 4 }}>
+        {shelf.label}
+      </span>
     </>
   );
 }

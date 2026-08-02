@@ -90,6 +90,39 @@ export const BOX_STATUS_LABEL: Record<string, string> = {
   cancelled: 'снят',
 };
 
+/** Русское склонение: 1 день, 2 дня, 5 дней. */
+export function pluralDays(days: number): string {
+  const mod10 = days % 10;
+  const mod100 = days % 100;
+  if (mod10 === 1 && mod100 !== 11) return `${days} день`;
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return `${days} дня`;
+  return `${days} дней`;
+}
+
+/**
+ * Сколько осталось до конца срока годности и насколько это срочно.
+ * Цвет — сигнал: чем меньше времени, тем горячее плашка.
+ */
+export function shelfLife(bestBeforeIso: string): { label: string; tone: 'fresh' | 'soon' | 'urgent' } {
+  const left = new Date(bestBeforeIso).getTime() - Date.now();
+  const hours = Math.floor(left / 3_600_000);
+
+  if (left <= 0) return { label: 'истёк', tone: 'urgent' };
+  if (hours < 24) return { label: hours <= 1 ? 'меньше часа' : `${hours} ч`, tone: 'urgent' };
+
+  const days = Math.floor(hours / 24);
+  if (days <= 2) return { label: pluralDays(days), tone: 'soon' };
+  return { label: pluralDays(days), tone: 'fresh' };
+}
+
+export const CATEGORY_LABEL: Record<string, string> = {
+  bakery: 'Пекарня',
+  coffee: 'Кофейня',
+  kitchen: 'Кулинария',
+  restaurant: 'Ресторан',
+  grocery: 'Магазин продуктов',
+};
+
 export const MERCHANT_STATUS_LABEL: Record<string, string> = {
   pending: 'на модерации',
   approved: 'одобрено',

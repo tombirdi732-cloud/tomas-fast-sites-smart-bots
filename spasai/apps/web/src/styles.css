@@ -1,6 +1,7 @@
 /*
- * Оформление панели заведения. Та же система, что в макете приложения:
- * бумажный фон, чернильный текст, жёлтый — только на ценник и код выдачи.
+ * Панель заведения и админка. Та же система, что в мобильном приложении:
+ * прохладный светлый фон, белые карточки, зелёный на действия и выгоду,
+ * тёплые цвета — на срок годности и предупреждения.
  */
 
 @font-face {
@@ -17,52 +18,50 @@
   src: url('/fonts/golos-latin.woff2') format('woff2');
   unicode-range: U+0000-00FF, U+2000-206F, U+20AC, U+2122;
 }
-@font-face {
-  font-family: 'Ticket';
-  font-weight: 500 600;
-  font-display: swap;
-  src: url('/fonts/oswald-cyrillic.woff2') format('woff2');
-  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
-}
-@font-face {
-  font-family: 'Ticket';
-  font-weight: 500 600;
-  font-display: swap;
-  src: url('/fonts/oswald-latin.woff2') format('woff2');
-  unicode-range: U+0000-00FF, U+2000-206F, U+20AC, U+2122;
-}
 
 :root {
-  --paper: #f6f5f1;
+  --bg: #f4f6f7;
   --card: #ffffff;
-  --card-sunk: #efeee8;
-  --ink: #1a1b17;
-  --ink-soft: #6b6e63;
-  --ink-faint: #a3a698;
-  --rule: #e2e1d8;
-  --sticker: #ffd400;
-  --green: #1f5e3d;
-  --green-wash: #e6efe8;
-  --ember: #c2410c;
-  --ember-wash: #fbeae1;
+  --sunk: #eef1f3;
+  --ink: #1a1d1f;
+  --ink-soft: #8b9296;
+  --ink-faint: #c4cacd;
+  --rule: #eaeef0;
 
-  --radius: 14px;
-  --gap: 16px;
+  --green: #21a038;
+  --green-dark: #1b8a30;
+  --green-wash: #e8f5ec;
+
+  --fresh: #ffc531;
+  --soon: #ff8a34;
+  --urgent: #e5342b;
+  --urgent-wash: #fdecea;
+  --warn-wash: #fff4e0;
+  --discount: #ff7a2f;
+  --star: #ffb800;
+
+  --radius: 16px;
+  --shadow: 0 1px 2px rgba(26, 29, 31, 0.04), 0 8px 24px -16px rgba(26, 29, 31, 0.24);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --paper: #131410;
-    --card: #1c1e19;
-    --card-sunk: #24261f;
-    --ink: #f0efe8;
-    --ink-soft: #9a9c8f;
-    --ink-faint: #6e7165;
-    --rule: #2e312a;
-    --green: #6fbc8e;
-    --green-wash: #1b2a21;
-    --ember: #f97316;
-    --ember-wash: #2c1c11;
+    --bg: #111315;
+    --card: #1b1e21;
+    --sunk: #24282b;
+    --ink: #f2f4f5;
+    --ink-soft: #9aa1a6;
+    --ink-faint: #5f676c;
+    --rule: #2a2f33;
+
+    --green: #3ebe58;
+    --green-dark: #2fa648;
+    --green-wash: #17301d;
+
+    --fresh: #e0ac21;
+    --urgent-wash: #2c1618;
+    --warn-wash: #2c2113;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 12px 28px -18px rgba(0, 0, 0, 0.8);
   }
 }
 
@@ -72,7 +71,7 @@
 
 body {
   margin: 0;
-  background: var(--paper);
+  background: var(--bg);
   color: var(--ink);
   font-family: 'Golos', ui-sans-serif, system-ui, sans-serif;
   font-size: 15px;
@@ -81,8 +80,9 @@ body {
 }
 
 :focus-visible {
-  outline: 2px solid var(--ember);
+  outline: 2px solid var(--green);
   outline-offset: 2px;
+  border-radius: 6px;
 }
 
 h1,
@@ -93,28 +93,36 @@ h3 {
 }
 
 h1 {
-  font-size: 1.75rem;
-  font-weight: 600;
+  font-size: 1.6rem;
+  font-weight: 700;
 }
 
 h2 {
-  font-size: 1.25rem;
-  font-weight: 600;
+  font-size: 1.15rem;
+  font-weight: 700;
 }
 
 a {
   color: inherit;
 }
 
+code {
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+  font-size: 0.9em;
+  background: var(--sunk);
+  padding: 2px 6px;
+  border-radius: 6px;
+}
+
 /* ── каркас ─────────────────────────────────────────────────── */
 
 .shell {
   display: grid;
-  grid-template-columns: 232px minmax(0, 1fr);
+  grid-template-columns: 240px minmax(0, 1fr);
   min-height: 100vh;
 }
 
-@media (max-width: 820px) {
+@media (max-width: 860px) {
   .shell {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -122,14 +130,14 @@ a {
 
 .sidebar {
   border-right: 1px solid var(--rule);
-  padding: 22px 16px;
+  padding: 22px 14px;
   display: flex;
   flex-direction: column;
-  gap: 26px;
+  gap: 24px;
   background: var(--card);
 }
 
-@media (max-width: 820px) {
+@media (max-width: 860px) {
   .sidebar {
     border-right: none;
     border-bottom: 1px solid var(--rule);
@@ -137,23 +145,37 @@ a {
 }
 
 .logo {
-  font-family: 'Ticket', ui-sans-serif, system-ui, sans-serif;
-  font-weight: 600;
-  font-size: 1.6rem;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
-  line-height: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 8px;
 }
 
-.logo small {
+.logo__mark {
+  width: 36px;
+  height: 36px;
+  border-radius: 11px;
+  background: var(--green);
+  display: grid;
+  place-items: center;
+  color: #fff;
+  font-weight: 800;
+  font-size: 1.1rem;
+  flex: none;
+}
+
+.logo__text {
+  font-weight: 800;
+  font-size: 1.1rem;
+  line-height: 1.1;
+}
+
+.logo__text small {
   display: block;
-  font-family: 'Golos', ui-sans-serif, system-ui, sans-serif;
   font-size: 0.7rem;
   font-weight: 400;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
   color: var(--ink-soft);
-  margin-top: 6px;
+  margin-top: 2px;
 }
 
 .nav {
@@ -162,7 +184,7 @@ a {
   gap: 2px;
 }
 
-@media (max-width: 820px) {
+@media (max-width: 860px) {
   .nav {
     flex-direction: row;
     flex-wrap: wrap;
@@ -170,68 +192,85 @@ a {
 }
 
 .nav a {
-  padding: 9px 12px;
-  border-radius: 10px;
+  padding: 10px 12px;
+  border-radius: 11px;
   text-decoration: none;
   color: var(--ink-soft);
+  font-weight: 500;
 }
 
 .nav a:hover {
-  background: var(--card-sunk);
+  background: var(--sunk);
   color: var(--ink);
 }
 
 .nav a.is-active {
-  background: var(--ink);
-  color: var(--paper);
-  font-weight: 600;
+  background: var(--green-wash);
+  color: var(--green);
+  font-weight: 700;
+}
+
+.nav__group {
+  margin-top: 14px;
+  padding: 0 12px 4px;
+  font-size: 0.7rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
 }
 
 .sidebar__foot {
   margin-top: auto;
   display: grid;
-  gap: 8px;
-  font-size: 0.8rem;
+  gap: 10px;
+  padding: 0 8px;
+  font-size: 0.85rem;
   color: var(--ink-soft);
 }
 
 .main {
-  padding: 28px clamp(16px, 4vw, 40px) 64px;
+  padding: 26px clamp(16px, 3vw, 32px) 64px;
   display: flex;
   flex-direction: column;
-  gap: 22px;
+  gap: 20px;
   min-width: 0;
 }
 
 .page-head {
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   justify-content: space-between;
   gap: 16px;
   flex-wrap: wrap;
 }
 
-/* ── элементы ───────────────────────────────────────────────── */
+/* ── карточки и статистика ──────────────────────────────────── */
 
 .card {
   background: var(--card);
-  border: 1px solid var(--rule);
   border-radius: var(--radius);
   padding: 18px;
 }
 
+.card--outline {
+  border: 1px solid var(--rule);
+}
+
 .stats {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 12px;
 }
 
 .stat__num {
-  font-family: 'Ticket', ui-sans-serif, system-ui, sans-serif;
-  font-weight: 600;
-  font-size: 2rem;
-  line-height: 1;
+  font-size: 1.9rem;
+  font-weight: 800;
+  line-height: 1.1;
   font-variant-numeric: tabular-nums;
+}
+
+.stat__num--green {
+  color: var(--green);
 }
 
 .stat__label {
@@ -240,38 +279,39 @@ a {
   margin-top: 6px;
 }
 
+/* ── таблицы ────────────────────────────────────────────────── */
+
+.table-wrap {
+  overflow-x: auto;
+}
+
 .table {
   width: 100%;
   border-collapse: collapse;
   font-variant-numeric: tabular-nums;
 }
 
-.table-wrap {
-  overflow-x: auto;
-}
-
 .table th {
   text-align: left;
-  font-family: 'Ticket', ui-sans-serif, system-ui, sans-serif;
-  font-weight: 500;
-  font-size: 0.72rem;
-  letter-spacing: 0.14em;
+  font-size: 0.74rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--ink-soft);
-  padding: 0 12px 10px 0;
+  padding: 0 14px 10px 0;
   white-space: nowrap;
 }
 
 .table td {
-  padding: 12px 12px 12px 0;
+  padding: 13px 14px 13px 0;
   border-top: 1px solid var(--rule);
   vertical-align: top;
 }
 
 .price {
-  font-family: 'Ticket', ui-sans-serif, system-ui, sans-serif;
-  font-weight: 600;
-  font-size: 1.1rem;
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: var(--green);
   font-variant-numeric: tabular-nums;
 }
 
@@ -282,38 +322,79 @@ a {
   margin-left: 6px;
 }
 
+/* ── плашки ─────────────────────────────────────────────────── */
+
 .pill {
   display: inline-block;
-  padding: 3px 9px;
+  padding: 4px 10px;
   border-radius: 999px;
   font-size: 0.75rem;
-  font-weight: 600;
+  font-weight: 700;
   white-space: nowrap;
 }
 
 .pill--active,
-.pill--paid {
+.pill--paid,
+.pill--ready,
+.pill--approved {
   background: var(--green-wash);
   color: var(--green);
 }
 
 .pill--muted,
 .pill--expired,
-.pill--cancelled {
-  background: var(--card-sunk);
+.pill--cancelled,
+.pill--collected {
+  background: var(--sunk);
   color: var(--ink-soft);
 }
 
 .pill--warn,
-.pill--no_show {
-  background: var(--ember-wash);
-  color: var(--ember);
+.pill--pending,
+.pill--pending_payment {
+  background: var(--warn-wash);
+  color: var(--soon);
 }
 
-.pill--sticker,
+.pill--danger,
+.pill--no_show,
+.pill--rejected,
+.pill--suspended {
+  background: var(--urgent-wash);
+  color: var(--urgent);
+}
+
 .pill--sold_out {
-  background: var(--sticker);
-  color: #1a1b17;
+  background: var(--fresh);
+  color: #1a1d1f;
+}
+
+.pill--discount {
+  background: var(--discount);
+  color: #fff;
+}
+
+/* Срок годности: чем меньше времени, тем горячее плашка. */
+.shelf {
+  display: inline-block;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: #fff;
+  white-space: nowrap;
+}
+
+.shelf--fresh {
+  background: var(--fresh);
+}
+
+.shelf--soon {
+  background: var(--soon);
+}
+
+.shelf--urgent {
+  background: var(--urgent);
 }
 
 /* ── формы ──────────────────────────────────────────────────── */
@@ -325,20 +406,19 @@ a {
 
 .grid-2 {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
   gap: 14px;
 }
 
 .field {
   display: grid;
-  gap: 5px;
+  gap: 6px;
   min-width: 0;
 }
 
 .field > span {
-  font-size: 0.78rem;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  font-size: 0.8rem;
+  font-weight: 500;
   color: var(--ink-soft);
 }
 
@@ -347,22 +427,24 @@ textarea,
 select {
   font: inherit;
   color: inherit;
-  background: var(--card);
-  border: 1px solid var(--rule);
-  border-radius: 10px;
-  padding: 10px 12px;
+  background: var(--bg);
+  border: 1px solid transparent;
+  border-radius: 12px;
+  padding: 12px 14px;
   width: 100%;
 }
 
 input:focus,
 textarea:focus,
 select:focus {
-  border-color: var(--ink-faint);
+  border-color: var(--green);
+  background: var(--card);
+  outline: none;
 }
 
 textarea {
   resize: vertical;
-  min-height: 76px;
+  min-height: 80px;
 }
 
 label.check {
@@ -370,6 +452,7 @@ label.check {
   align-items: center;
   gap: 9px;
   color: var(--ink);
+  font-size: 0.9rem;
 }
 
 label.check input {
@@ -378,17 +461,19 @@ label.check input {
 
 .btn {
   font: inherit;
-  font-weight: 600;
-  padding: 11px 18px;
-  border: none;
-  border-radius: 11px;
-  background: var(--ink);
-  color: var(--paper);
+  font-weight: 700;
+  padding: 12px 20px;
+  border: 1px solid var(--green);
+  border-radius: 12px;
+  background: var(--green);
+  color: #fff;
   cursor: pointer;
+  white-space: nowrap;
 }
 
 .btn:hover:not(:disabled) {
-  opacity: 0.88;
+  background: var(--green-dark);
+  border-color: var(--green-dark);
 }
 
 .btn:disabled {
@@ -399,12 +484,28 @@ label.check input {
 .btn--ghost {
   background: transparent;
   color: var(--ink);
-  border: 1px solid var(--rule);
+  border-color: var(--rule);
+}
+
+.btn--ghost:hover:not(:disabled) {
+  background: var(--sunk);
+  border-color: var(--ink-faint);
+}
+
+.btn--danger {
+  background: transparent;
+  color: var(--urgent);
+  border-color: var(--urgent);
+}
+
+.btn--danger:hover:not(:disabled) {
+  background: var(--urgent-wash);
 }
 
 .btn--small {
-  padding: 7px 12px;
+  padding: 8px 14px;
   font-size: 0.85rem;
+  border-radius: 10px;
 }
 
 .row {
@@ -417,15 +518,18 @@ label.check input {
 /* ── сообщения ──────────────────────────────────────────────── */
 
 .alert {
-  padding: 12px 14px;
-  border-radius: 11px;
-  border-left: 3px solid var(--ember);
-  background: var(--ember-wash);
+  padding: 13px 16px;
+  border-radius: 12px;
+  background: var(--urgent-wash);
+  color: var(--ink);
 }
 
 .alert--ok {
-  border-left-color: var(--green);
   background: var(--green-wash);
+}
+
+.alert--warn {
+  background: var(--warn-wash);
 }
 
 .muted {
@@ -433,14 +537,14 @@ label.check input {
 }
 
 .empty {
-  padding: 28px;
+  padding: 40px 24px;
   text-align: center;
   color: var(--ink-soft);
-  border: 1px dashed var(--rule);
+  background: var(--card);
   border-radius: var(--radius);
 }
 
-/* ── вход и выдача по коду ──────────────────────────────────── */
+/* ── вход и код выдачи ──────────────────────────────────────── */
 
 .centered {
   min-height: 100vh;
@@ -456,10 +560,71 @@ label.check input {
 }
 
 .code-input {
-  font-family: 'Ticket', ui-sans-serif, system-ui, sans-serif;
-  font-size: 2rem;
-  font-weight: 600;
+  font-size: 1.9rem;
+  font-weight: 800;
   letter-spacing: 0.3em;
   text-align: center;
   font-variant-numeric: tabular-nums;
+  padding-left: 0.3em;
+}
+
+/* Код приглашения — его диктуют по телефону, поэтому крупно и моноширинно. */
+.invite-code {
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  background: var(--green-wash);
+  color: var(--green);
+  padding: 12px 18px;
+  border-radius: 12px;
+  display: inline-block;
+}
+
+/* ── модерация ──────────────────────────────────────────────── */
+
+.check-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.check-list li {
+  display: flex;
+  gap: 9px;
+  align-items: flex-start;
+  font-size: 0.9rem;
+}
+
+.check-list__mark {
+  flex: none;
+  width: 18px;
+  text-align: center;
+  font-weight: 700;
+}
+
+.check-list__mark--ok {
+  color: var(--green);
+}
+
+.check-list__mark--warn {
+  color: var(--urgent);
+}
+
+.dl {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 8px 18px;
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.dl dt {
+  color: var(--ink-soft);
+}
+
+.dl dd {
+  margin: 0;
 }

@@ -17,3 +17,6 @@ dist/
 # Боевые секреты и дампы
 deploy/.env
 deploy/backups/*.sql.gz
+
+# Инкрементальные кэши TypeScript
+*.tsbuildinfo

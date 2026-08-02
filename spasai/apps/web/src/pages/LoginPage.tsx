@@ -1,6 +1,7 @@
 import { useState } from 'react';
 
 import { ApiError, api, tokens } from '../lib/api';
+import { Logo } from '../components/Logo';
 import { useSession } from '../lib/session';
 
 interface RequestCodeResponse {
@@ -69,10 +70,7 @@ export function LoginPage() {
   return (
     <div className="centered">
       <div className="auth-card">
-        <div className="logo">
-          Спасай
-          <small>панель заведения</small>
-        </div>
+        <Logo caption="панель заведения" />
 
         {error && <div className="alert">{error}</div>}
 

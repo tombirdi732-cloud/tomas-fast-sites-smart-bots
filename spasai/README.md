@@ -88,7 +88,10 @@ npm run api -- typecheck
 `Favorite`, `Notification`. Дополнительно заведены две служебные таблицы:
 
 - `PhoneVerification` — одноразовые SMS-коды для входа (этап 2);
-- `PlatformSettings` — глобальная комиссия и сервисный сбор (этап 8), одна строка `id = 1`.
+- `PlatformSettings` — глобальная комиссия и сервисный сбор (этап 8), одна строка `id = 1`;
+- `RefreshToken` — refresh-токены (хранятся как HMAC-хеши, не в открытом виде);
+- `MerchantStaff` и `MerchantInvite` — доступ к панели: владелец, кассиры и
+  одноразовые коды приглашений (см. [`docs/access.md`](docs/access.md)).
 
 ### Соглашения
 
@@ -159,6 +162,7 @@ POST   /orders/:id/cancel
 POST   /orders/:id/pay-dev         только в dev, заменится вебхуком ЮKassa
 
 POST   /merchants                  заявка на регистрацию → на модерацию
+                                   { …, inviteCode? } — по коду платформы одобряется сразу
 GET    /merchants/:id              публичный
 GET    /merchants/me
 GET    /merchants/me/stats
@@ -169,6 +173,11 @@ PATCH  /merchants/me/boxes/:id
 GET    /merchants/me/orders?pending=true
 POST   /merchants/me/orders/collect  { pickupCode }
 
+GET    /merchants/me/staff           сотрудники заведения
+POST   /merchants/me/staff/invite    { note?, expiresInDays? } → код для кассира
+DELETE /merchants/me/staff/:userId   только владелец, владельца убрать нельзя
+POST   /merchants/join               { code } — вход сотрудника по коду
+
 POST   /reviews                    только по полученному заказу, один раз
 GET    /reviews?merchantId=        публичный
 POST   /reviews/:id/reply          роль merchant
@@ -176,6 +185,7 @@ POST   /reviews/:id/reply          роль merchant
 GET    /favorites   POST /favorites   DELETE /favorites/:merchantId
 
 GET    /admin/merchants?status               роль admin
+POST   /admin/invites                        { note?, expiresInDays? } → код заведению
 POST   /admin/merchants/:id/approve
 POST   /admin/merchants/:id/reject           { reason }
 POST   /admin/merchants/:id/suspend          { reason }
@@ -233,11 +243,36 @@ POST   /admin/maintenance/run                прогнать фоновые з�
 > документов юрлица — на это уходит несколько дней. Без согласованного имени
 > сообщения уходят с общего номера провайдера.
 
+## Доступ заведений и модерация
+
+Как выдавать доступ ресторанам, что проверяется по ИНН автоматически и чем
+владелец отличается от кассира — в [`docs/access.md`](docs/access.md).
+
+## Деньги
+
+Режим приёма оплаты переключается переменной `PAYMENTS_MODE`:
+
+| Значение | Кто принимает деньги |
+|---|---|
+| `on_pickup` (по умолчанию) | заведение на своей кассе; платформа денег не касается, сервисный сбор не берётся |
+| `online` | платформа через ЮKassa; нужны эквайринг, касса по 54-ФЗ и агентский договор |
+
+Самозанятому доступен только `on_pickup`: НПД запрещает посреднические
+доходы. Подробно — в [`docs/payments.md`](docs/payments.md).
+
 ## Демо-данные
 
 `npm run api -- db:seed` создаёт админа `+79990000000`, владельца заведений
 `+79990000001`, покупателя `+79990000002`, два одобренных заведения в центре
 Москвы и два активных бокса.
+
+> В production сид не запускается: он падает с ошибкой при `NODE_ENV=production`.
+> Боевая база должна содержать только настоящие заведения, прошедшие модерацию —
+> ни выдуманных боксов, ни выдуманных отзывов там быть не должно.
+
+## Скриншоты
+
+Экраны панели и админки — в [`docs/screens/`](docs/screens/README.md).
 
 ## Сборка APK
 
@@ -271,7 +306,8 @@ npx eas build --platform android --profile production
 Пошаговая инструкция по серверу, домену, сертификату и регламенту —
 в [`deploy/README.md`](deploy/README.md). Коротко: облачный сервер KVM,
 Ubuntu 24.04, от 2 vCPU / 4 ГБ / 40 ГБ NVMe, обязательно в России (152-ФЗ),
-плюс домен для вебхука ЮKassa.
+плюс домен. Для тестов хватит 2 vCPU / 2 ГБ / 10 ГБ — там свои оговорки,
+они описаны отдельным разделом в той же инструкции.
 
 - **CI** — `.github/workflows/spasai-ci.yml`: линт, типы, тесты и сборка для
   API, панели и мобильного приложения; миграции проверяются на чистой базе

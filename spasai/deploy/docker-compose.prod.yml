@@ -3,11 +3,35 @@
 #
 # Наружу торчит только nginx (80 и 443). База, Redis и API портов не публикуют —
 # они доступны лишь внутри сети контейнеров.
+#
+# По умолчанию стек рассчитан на маленький сервер (2 vCPU / 2 ГБ / 10 ГБ):
+# логи ограничены, хранилище фотографий (minio) выключено — включается
+# профилем `storage`, когда под фото появится отдельный диск или S3.
+
+# Логи Docker по умолчанию растут без предела и однажды съедают весь диск.
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: '10m'
+    max-file: '3'
 
 services:
   postgres:
     image: postgis/postgis:16-3.4
     restart: always
+    logging: *logging
+    # Настройки под 2 ГБ памяти. На сервере пожирнее поднимите shared_buffers
+    # до четверти RAM, а work_mem — до 8-16 МБ.
+    command:
+      - postgres
+      - -c
+      - shared_buffers=256MB
+      - -c
+      - work_mem=4MB
+      - -c
+      - maintenance_work_mem=64MB
+      - -c
+      - max_connections=50
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -26,7 +50,17 @@ services:
   redis:
     image: redis:7-alpine
     restart: always
-    command: ['redis-server', '--appendonly', 'yes', '--requirepass', '${REDIS_PASSWORD}']
+    logging: *logging
+    command:
+      - redis-server
+      - --appendonly
+      - 'yes'
+      - --requirepass
+      - '${REDIS_PASSWORD}'
+      - --maxmemory
+      - 128mb
+      - --maxmemory-policy
+      - allkeys-lru
     volumes:
       - redis-data:/data
     healthcheck:
@@ -35,11 +69,15 @@ services:
       timeout: 5s
       retries: 10
 
-  # S3-совместимое хранилище фотографий. Если фото уедут в Yandex Object
-  # Storage — сервис можно выключить и указать боевые ключи в .env.
+  # S3-совместимое хранилище фотографий. Выключено по умолчанию: на стартовом
+  # сервере под фотографии нет ни памяти, ни диска — берите Yandex Object
+  # Storage и укажите его ключи в .env. Поднять локально:
+  #   docker compose ... --profile storage up -d minio
   minio:
     image: minio/minio:latest
+    profiles: ['storage']
     restart: always
+    logging: *logging
     command: ['server', '/data', '--console-address', ':9001']
     environment:
       MINIO_ROOT_USER: ${S3_ACCESS_KEY}
@@ -53,13 +91,15 @@ services:
       dockerfile: Dockerfile
       target: production
     restart: always
+    logging: *logging
     env_file: [.env]
     environment:
       NODE_ENV: production
       PORT: 3000
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?schema=public
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
-      S3_ENDPOINT: http://minio:9000
+      # Память ноды: на 2 ГБ сервера иначе V8 разрастается и его убивает OOM.
+      NODE_OPTIONS: --max-old-space-size=512
     # Миграции применяются на старте: контейнер не поднимется на кривой схеме.
     command: sh -c "npx prisma migrate deploy && node dist/main.js"
     depends_on:
@@ -75,6 +115,7 @@ services:
   nginx:
     image: nginx:1.27-alpine
     restart: always
+    logging: *logging
     ports:
       - '80:80'
       - '443:443'

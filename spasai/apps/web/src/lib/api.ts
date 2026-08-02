@@ -139,6 +139,8 @@ export interface Merchant {
   commissionRate: string;
   ratingAvg: string;
   ratingCount: number;
+  verification?: Verification | null;
+  createdAt?: string;
 }
 
 export interface Box {
@@ -183,6 +185,47 @@ export interface MerchantStats {
   activeBoxes: number;
   ratingAvg: number;
   ratingCount: number;
+}
+
+/** Результат автопроверки ИНН по реестру ФНС. */
+export interface Verification {
+  checked: boolean;
+  found: boolean;
+  active: boolean;
+  legalName: string | null;
+  ogrn: string | null;
+  kind: 'LEGAL' | 'INDIVIDUAL' | null;
+  address: string | null;
+  management: string | null;
+  status: string | null;
+  warnings: string[];
+}
+
+export interface Invite {
+  code: string;
+  expiresAt: string;
+  kind: 'merchant' | 'staff';
+  note: string | null;
+}
+
+export interface StaffMember {
+  id: string;
+  role: 'owner' | 'staff';
+  createdAt: string;
+  user: { id: string; phone: string; name: string | null };
+}
+
+export interface AdminStats {
+  gmv: number;
+  platformRevenue: number;
+  orders: number;
+  ordersCollected: number;
+  ordersNoShow: number;
+  users: number;
+  merchantsApproved: number;
+  merchantsPending: number;
+  boxesSaved: number;
+  topMerchants: Array<{ id: string; title: string; orders: number; gmv: number }>;
 }
 
 export interface Review {
