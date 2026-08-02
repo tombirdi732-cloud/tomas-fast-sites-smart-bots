@@ -4,17 +4,16 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ApiError, api } from '../api';
 import type { BoxListItem, Order } from '../api';
+import { cancellationDeadline, useAppConfig } from '../appConfig';
 import { Button, Card, Notice } from '../components';
 import { money, pickupWindow, time } from '../format';
 import type { ScreenProps } from '../navigation';
 import { useTheme } from '../theme';
 
-/** Сервисный сбор берётся с бэкенда вместе с заказом; до этого показываем ожидаемый. */
-const EXPECTED_SERVICE_FEE = 2_900;
-
 /** Оформление заказа (экран 7 ТЗ): количество, разбивка, правила, оплата. */
 export function CheckoutScreen({ route, navigation }: ScreenProps<'Checkout'>) {
   const theme = useTheme();
+  const config = useAppConfig();
   const [box, setBox] = useState<BoxListItem | null>(null);
   const [quantity, setQuantity] = useState(1);
   const [error, setError] = useState<string | null>(null);
@@ -30,15 +29,25 @@ export function CheckoutScreen({ route, navigation }: ScreenProps<'Checkout'>) {
     })();
   }, [route.params.boxId]);
 
-  async function pay() {
+  async function order() {
     if (!box) return;
     setError(null);
     setBusy(true);
     try {
-      const created = await api<{ order: Order; paymentUrl: string | null }>('/orders', {
+      const created = await api<{
+        order: Order;
+        paymentUrl: string | null;
+        paymentsMode: 'on_pickup' | 'online';
+      }>('/orders', {
         method: 'POST',
         body: { boxId: box.id, quantity },
       });
+
+      // Оплата на месте: бронь уже с кодом выдачи, платить в приложении нечем.
+      if (created.paymentsMode === 'on_pickup') {
+        navigation.replace('Order', { orderId: created.order.id });
+        return;
+      }
 
       // Этап 6: здесь откроется оплата ЮKassa по paymentUrl.
       // Пока в dev заказ проводится напрямую.
@@ -66,10 +75,15 @@ export function CheckoutScreen({ route, navigation }: ScreenProps<'Checkout'>) {
   }
 
   const boxesAmount = box.price * quantity;
-  const total = boxesAmount + EXPECTED_SERVICE_FEE;
-  const freeCancellationUntil = new Date(
-    new Date(box.pickupStart).getTime() - 2 * 60 * 60 * 1000,
-  ).toISOString();
+  const total = boxesAmount + config.serviceFee;
+  const onPickup = config.paymentsMode === 'on_pickup';
+
+  // Заказ ещё не создан, поэтому «оформлен» — это прямо сейчас.
+  const cancelUntil = cancellationDeadline(
+    new Date().toISOString(),
+    box.pickupStart,
+    config,
+  );
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.bg }}>
@@ -103,7 +117,9 @@ export function CheckoutScreen({ route, navigation }: ScreenProps<'Checkout'>) {
 
         <Card>
           <Line label={`Боксы · ${quantity} шт.`} value={money(boxesAmount)} />
-          <Line label="Сервисный сбор" value={money(EXPECTED_SERVICE_FEE)} />
+          {config.serviceFee > 0 && (
+            <Line label="Сервисный сбор" value={money(config.serviceFee)} />
+          )}
           <View
             style={{
               flexDirection: 'row',
@@ -112,20 +128,29 @@ export function CheckoutScreen({ route, navigation }: ScreenProps<'Checkout'>) {
               paddingTop: 14,
             }}
           >
-            <Text style={{ color: theme.ink, fontSize: 17, fontWeight: '700' }}>Итого</Text>
+            <Text style={{ color: theme.ink, fontSize: 17, fontWeight: '700' }}>
+              {onPickup ? 'К оплате на месте' : 'Итого'}
+            </Text>
             <Text style={{ color: theme.ink, fontSize: 26, fontWeight: '800' }}>{money(total)}</Text>
           </View>
         </Card>
 
         <Notice>
-          Не забрали до {time(box.pickupEnd)} — деньги не возвращаются. Отменить бесплатно можно
-          до {time(freeCancellationUntil)}, за два часа до начала выдачи.
+          {onPickup
+            ? `Бокс придержат до ${time(box.pickupEnd)}, платите на кассе при получении. ` +
+              `Передумали — отмените заказ до ${time(cancelUntil.toISOString())}.`
+            : `Не забрали до ${time(box.pickupEnd)} — деньги не возвращаются. ` +
+              `Отменить бесплатно можно до ${time(cancelUntil.toISOString())}.`}
         </Notice>
       </ScrollView>
 
       <SafeAreaView edges={['bottom']} style={{ backgroundColor: theme.card }}>
         <View style={{ padding: 18, borderTopWidth: 1, borderColor: theme.rule }}>
-          <Button title={`Оплатить ${money(total)}`} onPress={() => void pay()} loading={busy} />
+          <Button
+            title={onPickup ? `Забронировать за ${money(total)}` : `Оплатить ${money(total)}`}
+            onPress={() => void order()}
+            loading={busy}
+          />
         </View>
       </SafeAreaView>
     </View>

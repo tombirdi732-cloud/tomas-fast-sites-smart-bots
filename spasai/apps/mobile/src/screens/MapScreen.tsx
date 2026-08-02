@@ -1,13 +1,13 @@
 import { useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, Text, View } from 'react-native';
+import { ActivityIndicator, PixelRatio, Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 
 import type { BoxListItem } from '../api';
-import { Button, Notice } from '../components';
-import { distance, money, pickupWindow } from '../format';
+import { Notice } from '../components';
+import { distance, money, pickupWindow, pluralBoxes } from '../format';
 import { MAPKIT_KEY, loadYamap } from '../mapkit';
 import type { RootStackParamList } from '../navigation';
 import { useTheme } from '../theme';
@@ -19,8 +19,31 @@ interface Coords {
   lng: number;
 }
 
+/** Заведение и его боксы: на карте это одна булавка. */
+interface Place {
+  id: string;
+  title: string;
+  lat: number;
+  lng: number;
+  distanceM: number;
+  boxes: BoxListItem[];
+}
+
 /** Насколько далеко надо увести карту, чтобы предложить поиск заново. */
 const RESEARCH_DISTANCE_M = 700;
+
+/**
+ * Булавки нарисованы картинкой: MapKit снимает растр с иконки, и вёрстка
+ * с текстом в этот снимок попадает не всегда — цена превращалась в пустой
+ * зелёный прямоугольник. Картинка рисуется одинаково всегда.
+ *
+ * Файл размером 96×120 px рассчитан на трёхкратную плотность, на других
+ * экранах масштаб пересчитывается — иначе булавка меняет размер от телефона
+ * к телефону.
+ */
+const PIN = require('../../assets/pin.png') as number;
+const PIN_ACTIVE = require('../../assets/pin_active.png') as number;
+const PIN_SCALE = PixelRatio.get() / 3;
 
 /**
  * Боксы на карте с карточкой снизу (экран 4 ТЗ).
@@ -41,15 +64,15 @@ export function MapScreen() {
   /** Куда увели карту. null — ищем вокруг пользователя. */
   const [searchAt, setSearchAt] = useState<Coords | null>(null);
   const [cameraAt, setCameraAt] = useState<Coords | null>(null);
+  /** Карточка снизу появляется только после нажатия на булавку. */
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const { boxes, coords, loading, error } = useNearbyBoxes(DEFAULT_FILTERS, searchAt);
 
-  const movedAway =
-    cameraAt !== null && metersBetween(cameraAt, coords) > RESEARCH_DISTANCE_M;
+  const places = useMemo(() => groupByPlace(boxes), [boxes]);
+  const selected = places.find((place) => place.id === selectedId) ?? null;
 
-  const selected: BoxListItem | undefined =
-    boxes.find((box) => box.id === selectedId) ?? boxes[0];
+  const movedAway = cameraAt !== null && metersBetween(cameraAt, coords) > RESEARCH_DISTANCE_M;
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.bg }} edges={[]}>
@@ -58,32 +81,31 @@ export function MapScreen() {
           <YandexMap
             yamap={yamap}
             theme={theme}
-            boxes={boxes}
+            places={places}
             center={coords}
-            selectedId={selected?.id ?? null}
+            selectedId={selectedId}
             onSelect={setSelectedId}
             onCameraMove={setCameraAt}
           />
         ) : (
           <SchematicMap
             theme={theme}
-            boxes={boxes}
+            places={places}
             center={coords}
-            selectedId={selected?.id ?? null}
+            selectedId={selectedId}
             onSelect={setSelectedId}
           />
         )}
 
         {error && (
-          <View
-            style={{
-              position: 'absolute',
-              top: insets.top + 12,
-              left: 18,
-              right: 18,
-            }}
-          >
+          <View style={{ position: 'absolute', top: insets.top + 12, left: 18, right: 18 }}>
             <Notice>{error}</Notice>
+          </View>
+        )}
+
+        {!MAPKIT_KEY && !error && (
+          <View style={{ position: 'absolute', top: insets.top + 12, left: 18, right: 18 }}>
+            <Notice>Схема вместо карты: не задан ключ MapKit</Notice>
           </View>
         )}
 
@@ -149,60 +171,100 @@ export function MapScreen() {
         )}
       </View>
 
-      {!MAPKIT_KEY && (
-        <View style={{ paddingHorizontal: 18, paddingTop: 12 }}>
-          <Notice>Схема вместо карты: не задан ключ MapKit</Notice>
-        </View>
-      )}
-
-
       {selected && (
-        <View
-          style={{
-            backgroundColor: theme.card,
-            borderTopWidth: 1,
-            borderColor: theme.rule,
-            padding: 18,
-            gap: 10,
-          }}
-        >
-          <Text style={{ color: theme.inkSoft, fontSize: 13 }}>
-            {selected.merchant.title} · {distance(selected.distanceM)}
-          </Text>
-          <Text style={{ color: theme.ink, fontSize: 17, fontWeight: '700' }}>{selected.title}</Text>
-          <View
-            style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' }}
-          >
-            <Text style={{ color: theme.ink, fontSize: 24, fontWeight: '800' }}>
-              {money(selected.price)}
-            </Text>
-            <Text style={{ color: theme.ink, fontWeight: '600' }}>
-              {pickupWindow(selected.pickupStart, selected.pickupEnd)}
-            </Text>
-          </View>
-          <Button
-            title="Открыть бокс"
-            onPress={() => navigation.navigate('Box', { boxId: selected.id })}
-          />
-        </View>
+        <PlaceCard
+          theme={theme}
+          place={selected}
+          onClose={() => setSelectedId(null)}
+          onOpen={(boxId) => navigation.navigate('Box', { boxId })}
+        />
       )}
     </SafeAreaView>
   );
 }
 
+/** Карточка заведения: появляется по нажатию на булавку, закрывается крестиком. */
+function PlaceCard({
+  theme,
+  place,
+  onClose,
+  onOpen,
+}: {
+  theme: Theme;
+  place: Place;
+  onClose: () => void;
+  onOpen: (boxId: string) => void;
+}) {
+  return (
+    <View
+      style={{
+        backgroundColor: theme.card,
+        borderTopWidth: 1,
+        borderColor: theme.rule,
+        paddingHorizontal: 18,
+        paddingTop: 14,
+        paddingBottom: 8,
+      }}
+    >
+      <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 12 }}>
+        <View style={{ flex: 1 }}>
+          <Text style={{ color: theme.ink, fontSize: 17, fontWeight: '700' }}>{place.title}</Text>
+          <Text style={{ color: theme.inkSoft, fontSize: 13, marginTop: 2 }}>
+            {distance(place.distanceM)} · {pluralBoxes(place.boxes.length)}
+          </Text>
+        </View>
+        <Pressable onPress={onClose} hitSlop={12}>
+          <Ionicons name="close" size={22} color={theme.inkSoft} />
+        </Pressable>
+      </View>
+
+      <ScrollView style={{ maxHeight: 232 }} showsVerticalScrollIndicator={false}>
+        {place.boxes.map((box) => (
+          <Pressable
+            key={box.id}
+            onPress={() => onOpen(box.id)}
+            style={({ pressed }) => ({
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 12,
+              paddingVertical: 12,
+              borderTopWidth: 1,
+              borderColor: theme.rule,
+              opacity: pressed ? 0.7 : 1,
+            })}
+          >
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: theme.ink, fontSize: 15, fontWeight: '600' }} numberOfLines={1}>
+                {box.title}
+              </Text>
+              <Text style={{ color: theme.inkSoft, fontSize: 13, marginTop: 2 }}>
+                {pickupWindow(box.pickupStart, box.pickupEnd)}
+              </Text>
+            </View>
+            <Text style={{ color: theme.green, fontSize: 19, fontWeight: '800' }}>
+              {money(box.price)}
+            </Text>
+            <Ionicons name="chevron-forward" size={18} color={theme.inkFaint} />
+          </Pressable>
+        ))}
+      </ScrollView>
+    </View>
+  );
+}
+
 interface MapProps {
   theme: Theme;
-  boxes: BoxListItem[];
+  places: Place[];
   center: Coords;
   selectedId: string | null;
   onSelect: (id: string) => void;
 }
 
-/** Подложка Яндекс.Карт с ценниками вместо булавок. */
+/** Подложка Яндекс.Карт с булавками заведений. */
 function YandexMap({
   yamap,
   theme,
-  boxes,
+  places,
   center,
   selectedId,
   onCameraMove,
@@ -228,90 +290,50 @@ function YandexMap({
         onCameraMove({ lat, lng: lon });
       }}
     >
-      {boxes.map((box) => (
-        <Marker
-          key={box.id}
-          point={{ lat: box.merchant.lat, lon: box.merchant.lng }}
-          anchor={{ x: 0.5, y: 1 }}
-          onPress={() => onSelect(box.id)}
-        >
-          <PriceTag theme={theme} price={box.price} active={box.id === selectedId} />
-        </Marker>
-      ))}
+      {places.map((place) => {
+        const active = place.id === selectedId;
+        return (
+          <Marker
+            key={place.id}
+            point={{ lat: place.lat, lon: place.lng }}
+            anchor={{ x: 0.5, y: 1 }}
+            source={active ? PIN_ACTIVE : PIN}
+            scale={active ? PIN_SCALE * 1.25 : PIN_SCALE}
+            zIndex={active ? 2 : 1}
+            onPress={() => onSelect(place.id)}
+          />
+        );
+      })}
     </Yamap>
   );
 }
 
-/**
- * Ценник на карте. MapKit снимает с этой вьюхи растр, поэтому здесь
- * только простые элементы — тени и изображения в снимок не попадают.
- */
-function PriceTag({
-  theme,
-  price,
-  active,
-}: {
-  theme: Theme;
-  price: number;
-  active: boolean;
-}) {
-  return (
-    <View style={{ alignItems: 'center' }}>
-      <View
-        style={{
-          paddingHorizontal: 10,
-          paddingVertical: 5,
-          borderRadius: 999,
-          borderWidth: 1.5,
-          borderColor: active ? theme.green : theme.rule,
-          backgroundColor: active ? theme.green : theme.card,
-        }}
-      >
-        <Text
-          numberOfLines={1}
-          style={{ color: active ? '#FFFFFF' : theme.ink, fontWeight: '700', fontSize: 13 }}
-        >
-          {money(price)}
-        </Text>
-      </View>
-      {/* хвостик, указывающий на точку */}
-      <View
-        style={{
-          width: 2,
-          height: 7,
-          backgroundColor: active ? theme.green : theme.rule,
-        }}
-      />
-    </View>
-  );
-}
-
 /** Запасной план местности: работает без ключа MapKit и на вебе. */
-function SchematicMap({ theme, boxes, center, selectedId, onSelect }: MapProps) {
+function SchematicMap({ theme, places, center, selectedId, onSelect }: MapProps) {
   const [size, setSize] = useState({ width: 0, height: 0 });
 
   /** Координаты → положение точки на плане, с равным масштабом по осям. */
   const pins = useMemo(() => {
-    if (boxes.length === 0 || size.width === 0) return [];
+    if (places.length === 0 || size.width === 0) return [];
 
     const latToM = 111_320;
     const lngToM = 111_320 * Math.cos((center.lat * Math.PI) / 180);
 
-    const points = boxes.map((box) => ({
-      box,
-      x: (box.merchant.lng - center.lng) * lngToM,
-      y: -(box.merchant.lat - center.lat) * latToM,
+    const points = places.map((place) => ({
+      place,
+      x: (place.lng - center.lng) * lngToM,
+      y: -(place.lat - center.lat) * latToM,
     }));
 
     const span = Math.max(...points.flatMap((point) => [Math.abs(point.x), Math.abs(point.y)]), 300);
     const scale = (Math.min(size.width, size.height) / 2 - 60) / span;
 
     return points.map((point) => ({
-      box: point.box,
+      place: point.place,
       left: size.width / 2 + point.x * scale,
       top: size.height / 2 + point.y * scale,
     }));
-  }, [boxes, center, size]);
+  }, [places, center, size]);
 
   return (
     <View
@@ -363,9 +385,9 @@ function SchematicMap({ theme, boxes, center, selectedId, onSelect }: MapProps) 
 
       {pins.map((pin) => (
         <Pressable
-          key={pin.box.id}
-          onPress={() => onSelect(pin.box.id)}
-          // хвостик ценника должен попадать ровно в точку заведения
+          key={pin.place.id}
+          onPress={() => onSelect(pin.place.id)}
+          // остриё булавки должно попадать ровно в точку заведения
           style={{
             position: 'absolute',
             left: pin.left,
@@ -373,11 +395,68 @@ function SchematicMap({ theme, boxes, center, selectedId, onSelect }: MapProps) 
             transform: [{ translateX: '-50%' }, { translateY: '-100%' }],
           }}
         >
-          <PriceTag theme={theme} price={pin.box.price} active={pin.box.id === selectedId} />
+          <PriceTag
+            theme={theme}
+            price={Math.min(...pin.place.boxes.map((box) => box.price))}
+            active={pin.place.id === selectedId}
+          />
         </Pressable>
       ))}
     </View>
   );
+}
+
+/** Ценник на схеме — здесь это обычная вёрстка, а не снимок для MapKit. */
+function PriceTag({ theme, price, active }: { theme: Theme; price: number; active: boolean }) {
+  return (
+    <View style={{ alignItems: 'center' }}>
+      <View
+        style={{
+          paddingHorizontal: 10,
+          paddingVertical: 5,
+          borderRadius: 999,
+          borderWidth: 1.5,
+          borderColor: active ? theme.green : theme.rule,
+          backgroundColor: active ? theme.green : theme.card,
+        }}
+      >
+        <Text
+          numberOfLines={1}
+          style={{ color: active ? '#FFFFFF' : theme.ink, fontWeight: '700', fontSize: 13 }}
+        >
+          {money(price)}
+        </Text>
+      </View>
+      <View style={{ width: 2, height: 7, backgroundColor: active ? theme.green : theme.rule }} />
+    </View>
+  );
+}
+
+/**
+ * Одно заведение — одна булавка. Иначе два бокса одной пекарни встают
+ * в одну точку, и вторую булавку не нажать: она под первой.
+ */
+function groupByPlace(boxes: BoxListItem[]): Place[] {
+  const places = new Map<string, Place>();
+
+  for (const box of boxes) {
+    const place = places.get(box.merchant.id);
+    if (place) {
+      place.boxes.push(box);
+      place.distanceM = Math.min(place.distanceM, box.distanceM);
+    } else {
+      places.set(box.merchant.id, {
+        id: box.merchant.id,
+        title: box.merchant.title,
+        lat: box.merchant.lat,
+        lng: box.merchant.lng,
+        distanceM: box.distanceM,
+        boxes: [box],
+      });
+    }
+  }
+
+  return [...places.values()];
 }
 
 /** Расстояние между точками по прямой, метры. */

@@ -1,7 +1,11 @@
-import { BoxStatus, OrderStatus } from '@prisma/client';
+import { BoxStatus, NotificationType, OrderStatus } from '@prisma/client';
 
 import { BoxErrorCode, OrderErrorCode } from '../common/errors/error-codes';
-import { FREE_CANCELLATION_LEAD_MS, OrdersService } from './orders.service';
+import {
+  CANCELLATION_GRACE_MS,
+  FREE_CANCELLATION_LEAD_MS,
+  OrdersService,
+} from './orders.service';
 
 const HOUR = 60 * 60 * 1000;
 
@@ -186,6 +190,7 @@ describe('OrdersService.cancelByCustomer — отмена (раздел 7.7)', (
     status?: OrderStatus;
     pickupStart?: Date;
     paidAt?: Date | null;
+    createdAt?: Date;
   }) {
     const built = makeService();
     const order = {
@@ -195,6 +200,8 @@ describe('OrdersService.cancelByCustomer — отмена (раздел 7.7)', (
       quantity: 1,
       status: overrides.status ?? OrderStatus.paid,
       paidAt: overrides.paidAt === undefined ? new Date() : overrides.paidAt,
+      // По умолчанию заказ старый: грейс-период первых 15 минут уже прошёл.
+      createdAt: overrides.createdAt ?? new Date(Date.now() - HOUR),
       box: {
         ...built.state,
         pickupStart: overrides.pickupStart ?? new Date(Date.now() + 5 * HOUR),
@@ -251,5 +258,82 @@ describe('OrdersService.cancelByCustomer — отмена (раздел 7.7)', (
 
   it('граница бесплатной отмены — ровно 2 часа', () => {
     expect(FREE_CANCELLATION_LEAD_MS).toBe(2 * 60 * 60 * 1000);
+  });
+
+  it('только что оформленный заказ отменяется, даже если выдача уже скоро', async () => {
+    const built = withOrder({
+      createdAt: new Date(Date.now() - 60 * 1000),
+      pickupStart: new Date(Date.now() + 10 * 60 * 1000),
+    });
+    built.state.quantityLeft = 0;
+
+    const cancelled = (await built.service.cancelByCustomer('u1', 'o1')) as unknown as {
+      status: OrderStatus;
+    };
+
+    expect(cancelled.status).toBe(OrderStatus.refunded);
+    expect(built.state.quantityLeft).toBe(1);
+  });
+
+  it('грейс-период отмены заканчивается через 15 минут', async () => {
+    const built = withOrder({
+      createdAt: new Date(Date.now() - CANCELLATION_GRACE_MS - 1000),
+      pickupStart: new Date(Date.now() + 10 * 60 * 1000),
+    });
+
+    await expect(built.service.cancelByCustomer('u1', 'o1')).rejects.toMatchObject({
+      code: OrderErrorCode.CANCELLATION_WINDOW_PASSED,
+    });
+  });
+});
+
+describe('OrdersService.cancelByMerchant — отмена заведением', () => {
+  function withOrder(status: OrderStatus) {
+    const built = makeService();
+    const order = {
+      id: 'o1',
+      userId: 'u1',
+      boxId: 'b1',
+      merchantId: 'm1',
+      quantity: 1,
+      status,
+      paidAt: new Date(),
+      createdAt: new Date(Date.now() - 5 * HOUR),
+      box: { title: 'Пекарский бокс' },
+    };
+    built.client.order.findFirst = jest.fn(() => Promise.resolve(order)) as never;
+    return built;
+  }
+
+  it('отменяет заказ без оглядки на окно отмены покупателя', async () => {
+    const built = withOrder(OrderStatus.ready);
+    built.state.quantityLeft = 0;
+    built.state.status = BoxStatus.sold_out;
+
+    const cancelled = (await built.service.cancelByMerchant('m1', 'o1')) as unknown as {
+      status: OrderStatus;
+    };
+
+    expect(cancelled.status).toBe(OrderStatus.refunded);
+    expect(built.state.quantityLeft).toBe(1);
+    expect(built.state.status).toBe(BoxStatus.active);
+  });
+
+  it('уведомляет покупателя об отмене', async () => {
+    const built = withOrder(OrderStatus.ready);
+
+    await built.service.cancelByMerchant('m1', 'o1');
+
+    expect(built.notifications.notify).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: 'u1', type: NotificationType.order_cancelled }),
+    );
+  });
+
+  it('выданный заказ отменить нельзя', async () => {
+    const built = withOrder(OrderStatus.collected);
+
+    await expect(built.service.cancelByMerchant('m1', 'o1')).rejects.toMatchObject({
+      code: OrderErrorCode.ORDER_NOT_CANCELLABLE,
+    });
   });
 });

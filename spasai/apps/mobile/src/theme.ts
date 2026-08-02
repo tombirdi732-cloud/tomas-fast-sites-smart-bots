@@ -28,6 +28,13 @@ export interface Theme {
   /** Плашка скидки. */
   discount: string;
 
+  /**
+   * Подложки предупреждений и ошибок. В тёмной теме они тоже тёмные —
+   * иначе светлый текст ложится на светлый фон и его не видно.
+   */
+  warnWash: string;
+  dangerWash: string;
+
   star: string;
   overlay: string;
   dark: boolean;
@@ -53,6 +60,9 @@ const light: Theme = {
 
   discount: '#FF7A2F',
 
+  warnWash: '#FFF4E0',
+  dangerWash: '#FDECEA',
+
   star: '#FFB800',
   overlay: 'rgba(0,0,0,0.45)',
   dark: false,
@@ -77,6 +87,9 @@ const dark: Theme = {
   badgeInk: '#141618',
 
   discount: '#FF7A2F',
+
+  warnWash: '#332615',
+  dangerWash: '#3A1E1C',
 
   star: '#FFB800',
   overlay: 'rgba(0,0,0,0.55)',
@@ -126,9 +139,9 @@ export function statusColors(status: string, theme: Theme): { bg: string; fg: st
     case 'collected':
       return { bg: theme.cardSunk, fg: theme.inkSoft };
     case 'no_show':
-      return { bg: '#FDECEA', fg: theme.urgent };
+      return { bg: theme.dangerWash, fg: theme.urgent };
     case 'pending_payment':
-      return { bg: '#FFF4E0', fg: theme.soon };
+      return { bg: theme.warnWash, fg: theme.soon };
     default:
       return { bg: theme.cardSunk, fg: theme.inkSoft };
   }

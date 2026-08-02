@@ -218,7 +218,7 @@ POST   /admin/maintenance/run                прогнать фоновые з�
 | 7.4 | `total = price × quantity + service_fee`, комиссия и доля заведения | `calculateOrderAmounts` |
 | 7.5 | Код выдачи: 6 цифр, уникален по заведению за сутки, генерируется при оплате | `OrdersService.markPaid` |
 | 7.6 | Не забрали до `pickup_end` → `no_show`, деньги не возвращаются | `OrdersService.markNoShows` |
-| 7.7 | Бесплатная отмена не позже чем за 2 часа до `pickup_start` | `OrdersService.cancelByCustomer` |
+| 7.7 | Отмена покупателем: 15 минут после оформления либо не позже чем за 2 часа до `pickup_start`; заведение отменяет без ограничений по времени | `OrdersService.cancelByCustomer`, `cancelByMerchant` |
 | 7.8 | `ST_DWithin` по радиусу, сортировка по расстоянию | `BoxesService.search` |
 | 7.9 | Пуши — этап 7 | — |
 

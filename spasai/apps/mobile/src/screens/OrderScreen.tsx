@@ -1,17 +1,22 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Linking, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Linking, ScrollView, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 
 import { ApiError, api } from '../api';
 import type { Order } from '../api';
+import { cancellationDeadline, useAppConfig } from '../appConfig';
 import { Button, Card, Notice } from '../components';
-import { ORDER_STATUS_LABEL, countdown, money, pickupWindow } from '../format';
+import { ORDER_STATUS_LABEL, countdown, money, pickupWindow, time } from '../format';
 import type { ScreenProps } from '../navigation';
 import { statusColors, useTheme } from '../theme';
 
 /** Активный заказ: крупный код выдачи и таймер до конца окна (экран 8 ТЗ). */
 export function OrderScreen({ route, navigation }: ScreenProps<'Order'>) {
   const theme = useTheme();
+  const config = useAppConfig();
+  // Нижняя кнопка не должна прятаться под системной навигацией.
+  const insets = useSafeAreaInsets();
   const [order, setOrder] = useState<Order | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [now, setNow] = useState(Date.now());
@@ -49,6 +54,14 @@ export function OrderScreen({ route, navigation }: ScreenProps<'Order'>) {
     }
   }
 
+  /** Отмена необратима, поэтому переспрашиваем — но ровно один раз. */
+  function confirmCancel() {
+    Alert.alert('Отменить заказ?', 'Бокс вернётся в продажу, забрать его уже не получится.', [
+      { text: 'Нет' },
+      { text: 'Отменить заказ', style: 'destructive', onPress: () => void cancel() },
+    ]);
+  }
+
   if (!order) {
     return (
       <View style={{ flex: 1, backgroundColor: theme.bg, justifyContent: 'center' }}>
@@ -66,10 +79,15 @@ export function OrderScreen({ route, navigation }: ScreenProps<'Order'>) {
   const active = order.status === 'paid' || order.status === 'ready';
   const colors = statusColors(order.status, theme);
 
+  const cancelUntil = order.box
+    ? cancellationDeadline(order.createdAt, order.box.pickupStart, config)
+    : null;
+  const cancellable = active && cancelUntil !== null && now < cancelUntil.getTime();
+
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: theme.bg }}
-      contentContainerStyle={{ padding: 18, gap: 16 }}
+      contentContainerStyle={{ padding: 18, paddingBottom: insets.bottom + 28, gap: 16 }}
     >
       {error && <Notice>{error}</Notice>}
 
@@ -91,7 +109,7 @@ export function OrderScreen({ route, navigation }: ScreenProps<'Order'>) {
             {order.pickupCode.slice(0, 3)} {order.pickupCode.slice(3)}
           </Text>
           <Text style={{ color: '#FFFFFF', opacity: 0.8, textAlign: 'center', fontSize: 13 }}>
-            Назовите код на кассе — сотрудник введёт его в панели заведения
+            Скажите этот код сотруднику
           </Text>
         </View>
       ) : (
@@ -105,7 +123,7 @@ export function OrderScreen({ route, navigation }: ScreenProps<'Order'>) {
       {active && order.box && (
         <View
           style={{
-            backgroundColor: '#FFF4E0',
+            backgroundColor: theme.warnWash,
             borderRadius: 14,
             padding: 14,
             flexDirection: 'row',
@@ -127,7 +145,12 @@ export function OrderScreen({ route, navigation }: ScreenProps<'Order'>) {
         )}
         {order.merchant && <Line label="Адрес" value={order.merchant.address} />}
         <Line label="Количество" value={`${order.quantity} шт.`} />
-        <Line label="Оплачено" value={money(order.total)} last />
+        {/* При оплате на кассе деньги ещё не заплачены — не врём в подписи. */}
+        <Line
+          label={config.paymentsMode === 'on_pickup' ? 'К оплате на месте' : 'Оплачено'}
+          value={money(order.total)}
+          last
+        />
       </Card>
 
       {order.merchant && (
@@ -142,8 +165,20 @@ export function OrderScreen({ route, navigation }: ScreenProps<'Order'>) {
         />
       )}
 
-      {active && (
-        <Button title="Отменить заказ" variant="ghost" onPress={() => void cancel()} loading={busy} />
+      {cancellable && cancelUntil && (
+        <View style={{ gap: 8 }}>
+          <Button title="Отменить заказ" variant="ghost" onPress={confirmCancel} loading={busy} />
+          <Text style={{ color: theme.inkSoft, fontSize: 13, textAlign: 'center' }}>
+            Отменить можно до {time(cancelUntil.toISOString())}
+          </Text>
+        </View>
+      )}
+
+      {active && !cancellable && (
+        <Text style={{ color: theme.inkSoft, fontSize: 13, textAlign: 'center' }}>
+          Время отмены прошло. Если планы изменились — позвоните в заведение,
+          они отменят заказ сами.
+        </Text>
       )}
 
       {order.status === 'collected' && (

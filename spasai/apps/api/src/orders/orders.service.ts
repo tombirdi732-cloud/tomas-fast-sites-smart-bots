@@ -17,6 +17,13 @@ export const PAYMENT_WINDOW_MS = 10 * 60 * 1000;
 /** Бесплатная отмена — не позже чем за 2 часа до начала выдачи (раздел 7.7 ТЗ). */
 export const FREE_CANCELLATION_LEAD_MS = 2 * 60 * 60 * 1000;
 
+/**
+ * Передумать сразу после оформления можно всегда: 15 минут заказ отменяется
+ * без вопросов, даже если выдача начинается через полчаса. Ошиблись боксом
+ * или количеством — исправляетесь сами, без звонков в заведение.
+ */
+export const CANCELLATION_GRACE_MS = 15 * 60 * 1000;
+
 /** Сколько раз пробуем сгенерировать неконфликтующий код выдачи. */
 const PICKUP_CODE_ATTEMPTS = 10;
 
@@ -238,8 +245,10 @@ export class OrdersService {
   }
 
   /**
-   * Отмена покупателем (раздел 7.7 ТЗ). Бесплатно — не позже чем за 2 часа
-   * до начала окна выдачи. Позже отмена невозможна: деньги невозвратны.
+   * Отмена покупателем (раздел 7.7 ТЗ). Отменить можно в двух случаях:
+   * в первые 15 минут после оформления — всегда, чтобы можно было исправить
+   * ошибку; либо не позже чем за 2 часа до начала выдачи. Дальше заведение
+   * уже отложило еду, и отмена только через само заведение.
    */
   async cancelByCustomer(userId: string, orderId: string): Promise<Order> {
     return this.prisma.$transaction(async (tx) => {
@@ -258,29 +267,100 @@ export class OrdersService {
         );
       }
 
-      const deadline = order.box.pickupStart.getTime() - FREE_CANCELLATION_LEAD_MS;
-      if (order.status !== OrderStatus.pending_payment && Date.now() > deadline) {
+      const deadline = OrdersService.cancellationDeadline(
+        order.createdAt,
+        order.box.pickupStart,
+      );
+
+      if (order.status !== OrderStatus.pending_payment && Date.now() > deadline.getTime()) {
         throw ApiException.badRequest(
           OrderErrorCode.CANCELLATION_WINDOW_PASSED,
-          'Бесплатная отмена возможна не позже чем за 2 часа до начала выдачи',
-          { freeCancellationUntil: new Date(deadline).toISOString() },
+          'Время отмены прошло. Позвоните в заведение — они могут отменить заказ сами',
+          { freeCancellationUntil: deadline.toISOString() },
         );
       }
 
-      await OrdersService.restoreQuantity(tx, order.boxId, order.quantity);
-
-      const updated = await tx.order.update({
-        where: { id: order.id },
-        data: {
-          status: order.paidAt ? OrderStatus.refunded : OrderStatus.cancelled,
-          cancelledAt: new Date(),
-        },
-      });
+      const updated = await OrdersService.cancel(tx, order);
 
       this.logger.log(
         `Заказ ${order.id} отменён покупателем, возвращено ${order.quantity} шт. в бокс ${order.boxId}`,
       );
       return updated;
+    });
+  }
+
+  /**
+   * Отмена заведением. Еда закончилась, кухня закрылась раньше, покупатель
+   * позвонил и попросил — причин много, и все они на стороне заведения,
+   * поэтому здесь окна отмены нет: отменить можно любой активный заказ.
+   */
+  async cancelByMerchant(merchantId: string, orderId: string): Promise<Order> {
+    const { before, updated } = await this.prisma.$transaction(async (tx) => {
+      const found = await tx.order.findFirst({
+        where: { id: orderId, merchantId },
+        include: { box: { select: { title: true } } },
+      });
+
+      if (!found) throw ApiException.notFound('Заказ не найден');
+
+      const cancellable: OrderStatus[] = [
+        OrderStatus.pending_payment,
+        OrderStatus.paid,
+        OrderStatus.ready,
+      ];
+      if (!cancellable.includes(found.status)) {
+        throw ApiException.badRequest(
+          OrderErrorCode.ORDER_NOT_CANCELLABLE,
+          `Заказ в статусе ${found.status} отменить нельзя`,
+        );
+      }
+
+      return { before: found, updated: await OrdersService.cancel(tx, found) };
+    });
+
+    this.logger.log(
+      `Заказ ${before.id} отменён заведением ${merchantId}, ` +
+        `возвращено ${before.quantity} шт. в бокс ${before.boxId}`,
+    );
+
+    // Покупатель уже держит в руках код выдачи — он обязан узнать об отмене.
+    await this.notifications.notify({
+      userId: before.userId,
+      type: NotificationType.order_cancelled,
+      title: 'Заказ отменён заведением',
+      body: `«${before.box.title}» забрать не получится. Деньги платить не нужно.`,
+      data: { orderId: before.id, type: 'order_cancelled_by_merchant' },
+    });
+
+    return updated;
+  }
+
+  /**
+   * До какого момента покупатель может отменить заказ сам: либо 15 минут
+   * с оформления, либо за 2 часа до выдачи — что позже.
+   */
+  static cancellationDeadline(createdAt: Date, pickupStart: Date): Date {
+    return new Date(
+      Math.max(
+        createdAt.getTime() + CANCELLATION_GRACE_MS,
+        pickupStart.getTime() - FREE_CANCELLATION_LEAD_MS,
+      ),
+    );
+  }
+
+  /** Общая часть отмены: вернуть количество в бокс и закрыть заказ. */
+  private static async cancel(
+    tx: Prisma.TransactionClient,
+    order: Pick<Order, 'id' | 'boxId' | 'quantity' | 'paidAt'>,
+  ): Promise<Order> {
+    await OrdersService.restoreQuantity(tx, order.boxId, order.quantity);
+
+    return tx.order.update({
+      where: { id: order.id },
+      data: {
+        status: order.paidAt ? OrderStatus.refunded : OrderStatus.cancelled,
+        cancelledAt: new Date(),
+      },
     });
   }
 

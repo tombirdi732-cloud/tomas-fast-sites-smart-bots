@@ -140,6 +140,22 @@ export class MerchantOrdersController {
     return this.orders.listForMerchant(merchant.id, pending === 'true');
   }
 
+  /**
+   * Отмена заказа заведением: еда закончилась или покупатель попросил
+   * отменить по телефону. Количество возвращается в бокс, покупателю
+   * уходит уведомление.
+   */
+  @Post(':id/cancel')
+  @HttpCode(HttpStatus.OK)
+  async cancel(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Query('merchantId') merchantId?: string,
+  ): Promise<Order> {
+    const merchant = await this.merchants.requireOwned(user.id, merchantId);
+    return this.orders.cancelByMerchant(merchant.id, id);
+  }
+
   /** Подтверждение выдачи по коду покупателя (раздел 5.5 ТЗ). */
   @Post('collect')
   @HttpCode(HttpStatus.OK)

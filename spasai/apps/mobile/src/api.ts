@@ -193,6 +193,25 @@ export interface BoxListItem {
   };
 }
 
+/** Настройки платформы: как платим и до какого момента можно отменить. */
+export interface AppConfig {
+  paymentsMode: 'on_pickup' | 'online';
+  serviceFee: number;
+  cancellationGraceMs: number;
+  cancellationLeadMs: number;
+}
+
+/**
+ * Пока настройки не пришли, считаем, что платим на кассе: в этом режиме
+ * платформа не берёт сервисный сбор, и обещать его на экране незачем.
+ */
+export const FALLBACK_CONFIG: AppConfig = {
+  paymentsMode: 'on_pickup',
+  serviceFee: 0,
+  cancellationGraceMs: 15 * 60 * 1000,
+  cancellationLeadMs: 2 * 60 * 60 * 1000,
+};
+
 export interface Order {
   id: string;
   quantity: number;

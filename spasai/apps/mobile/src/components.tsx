@@ -102,7 +102,7 @@ export function Notice({
   return (
     <View
       style={{
-        backgroundColor: good ? theme.greenWash : '#FFF4E0',
+        backgroundColor: good ? theme.greenWash : theme.warnWash,
         borderRadius: 14,
         padding: 14,
         flexDirection: 'row',

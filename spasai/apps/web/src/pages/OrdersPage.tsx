@@ -5,6 +5,9 @@ import type { Order } from '../lib/api';
 import { ORDER_STATUS_LABEL, dateTime, money, pickupWindow } from '../lib/format';
 import { useSession } from '../lib/session';
 
+/** Заказы, которые заведение ещё может отменить. */
+const CANCELLABLE = ['pending_payment', 'paid', 'ready'];
+
 /** Заказы и подтверждение выдачи по коду покупателя (раздел 5.5 ТЗ). */
 export function OrdersPage() {
   const { merchant } = useSession();
@@ -14,6 +17,8 @@ export function OrdersPage() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  /** Заказ, по которому переспрашиваем перед отменой. */
+  const [asking, setAsking] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!merchant) return;
@@ -48,6 +53,31 @@ export function OrdersPage() {
       await load();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Не удалось подтвердить выдачу');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /**
+   * Отмена со стороны заведения: еда закончилась или покупатель позвонил
+   * и попросил отменить. Бокс возвращается в продажу, покупателю уходит
+   * уведомление — поэтому переспрашиваем.
+   */
+  async function cancel(orderId: string) {
+    if (!merchant) return;
+
+    setError(null);
+    setNotice(null);
+    setBusy(true);
+    try {
+      await api<Order>(`/merchants/me/orders/${orderId}/cancel?merchantId=${merchant.id}`, {
+        method: 'POST',
+      });
+      setNotice('Заказ отменён, бокс вернулся в продажу. Покупатель получил уведомление.');
+      setAsking(null);
+      await load();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Не удалось отменить заказ');
     } finally {
       setBusy(false);
     }
@@ -110,6 +140,7 @@ export function OrdersPage() {
                 <th>Окно выдачи</th>
                 <th>Оплачен</th>
                 <th>Статус</th>
+                <th />
               </tr>
             </thead>
             <tbody>
@@ -134,6 +165,36 @@ export function OrdersPage() {
                     <span className={`pill pill--${order.status}`}>
                       {ORDER_STATUS_LABEL[order.status] ?? order.status}
                     </span>
+                  </td>
+                  <td>
+                    {CANCELLABLE.includes(order.status) &&
+                      (asking === order.id ? (
+                        <div className="row" style={{ flexWrap: 'nowrap' }}>
+                          <button
+                            className="btn btn--danger btn--small"
+                            type="button"
+                            disabled={busy}
+                            onClick={() => void cancel(order.id)}
+                          >
+                            Точно отменить
+                          </button>
+                          <button
+                            className="btn btn--ghost btn--small"
+                            type="button"
+                            onClick={() => setAsking(null)}
+                          >
+                            Нет
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          className="btn btn--ghost btn--small"
+                          type="button"
+                          onClick={() => setAsking(order.id)}
+                        >
+                          Отменить
+                        </button>
+                      ))}
                   </td>
                 </tr>
               ))}
