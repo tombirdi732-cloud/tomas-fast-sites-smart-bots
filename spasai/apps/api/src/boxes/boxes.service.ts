@@ -64,7 +64,6 @@ interface BoxSearchRow {
   merchant_timezone: string;
 }
 
-const DEFAULT_RADIUS_M = 3_000;
 const DEFAULT_LIMIT = 20;
 
 @Injectable()
@@ -281,7 +280,6 @@ export class BoxesService {
    * Индекс merchants_geo_idx построен ровно по этому выражению.
    */
   async search(query: SearchBoxesDto, userId?: string): Promise<BoxListItem[]> {
-    const radius = query.radius ?? DEFAULT_RADIUS_M;
     const limit = query.limit ?? DEFAULT_LIMIT;
     const offset = query.offset ?? 0;
 
@@ -293,8 +291,16 @@ export class BoxesService {
       Prisma.sql`b."quantity_left" > 0`,
       Prisma.sql`b."pickup_end" > now()`,
       Prisma.sql`m."status" = 'approved'::"MerchantStatus"`,
-      Prisma.sql`ST_DWithin(${merchantPoint}, ${point}, ${radius}::double precision)`,
     ];
+
+    // Радиус — необязательное сужение, а не условие показа. Без него
+    // сортировка по расстоянию сама поставит ближайшее наверх, и лента
+    // не будет пустой там, где заведений пока мало.
+    if (query.radius !== undefined) {
+      filters.push(
+        Prisma.sql`ST_DWithin(${merchantPoint}, ${point}, ${query.radius}::double precision)`,
+      );
+    }
 
     if (query.category) {
       filters.push(Prisma.sql`b."category" = ${query.category}`);

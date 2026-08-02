@@ -8,14 +8,15 @@ import type { BoxListItem } from './api';
 export const FALLBACK_COORDS = { lat: 55.7539, lng: 37.6208 };
 
 export interface Filters {
-  radius: number;
+  /** null — не ограничивать расстоянием: ближайшее всё равно будет сверху. */
+  radius: number | null;
   category: string | null;
   maxPrice: number | null;
   favoritesOnly: boolean;
 }
 
 export const DEFAULT_FILTERS: Filters = {
-  radius: 3000,
+  radius: null,
   category: null,
   maxPrice: null,
   favoritesOnly: false,
@@ -75,9 +76,9 @@ export function useNearbyBoxes(filters: Filters, at?: { lat: number; lng: number
     const params = new URLSearchParams({
       lat: String(coords.lat),
       lng: String(coords.lng),
-      radius: String(filters.radius),
       limit: '50',
     });
+    if (filters.radius !== null) params.set('radius', String(filters.radius));
     if (filters.category) params.set('category', filters.category);
     if (filters.maxPrice !== null) params.set('maxPrice', String(filters.maxPrice));
     if (filters.favoritesOnly) params.set('favoritesOnly', 'true');

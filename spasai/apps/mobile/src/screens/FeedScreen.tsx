@@ -33,7 +33,8 @@ const CATEGORIES: Array<{
   { key: 'grocery', label: 'Продукты', icon: 'nutrition-outline' },
 ];
 
-const RADIUS_OPTIONS = [1000, 3000, 10_000];
+/** null — «везде»: без ограничения по расстоянию. */
+const RADIUS_OPTIONS: Array<number | null> = [1000, 3000, 10_000, null];
 
 /** Главная: боксы рядом с поиском, категориями и фильтрами (экраны 3 и 5 ТЗ). */
 export function FeedScreen() {
@@ -226,7 +227,7 @@ export function FeedScreen() {
               const active = filters.radius === radius;
               return (
                 <Pressable
-                  key={radius}
+                  key={radius ?? 'all'}
                   onPress={() => setFilters((f) => ({ ...f, radius }))}
                   style={{
                     paddingHorizontal: 14,
@@ -236,7 +237,7 @@ export function FeedScreen() {
                   }}
                 >
                   <Text style={{ color: active ? '#FFF' : theme.inkSoft, fontSize: 13 }}>
-                    до {radius / 1000} км
+                    {radius === null ? 'везде' : `до ${radius / 1000} км`}
                   </Text>
                 </Pressable>
               );
@@ -306,7 +307,7 @@ export function FeedScreen() {
               <Text style={{ color: theme.inkSoft, textAlign: 'center', lineHeight: 22 }}>
                 {query
                   ? 'Ничего не нашлось. Попробуйте другой запрос.'
-                  : 'Рядом пока пусто. Увеличьте радиус или загляните ближе к вечеру — заведения выставляют боксы перед закрытием.'}
+                  : 'Пока пусто. Заведения выставляют боксы перед закрытием — загляните ближе к вечеру.'}
               </Text>
             </View>
           )
