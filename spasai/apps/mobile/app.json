@@ -8,13 +8,15 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "splash": {
-      "backgroundColor": "#F6F5F1",
+      "image": "./assets/splash-icon.png",
+      "backgroundColor": "#21A038",
       "resizeMode": "contain"
     },
     "android": {
       "package": "ru.spasai.app",
       "adaptiveIcon": {
-        "backgroundColor": "#FFD400"
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#21A038"
       },
       "permissions": [
         "ACCESS_COARSE_LOCATION",
@@ -56,6 +58,7 @@
     ],
     "extra": {
       "apiUrl": "https://tomas-it.ru/api"
-    }
+    },
+    "icon": "./assets/icon.png"
   }
 }
