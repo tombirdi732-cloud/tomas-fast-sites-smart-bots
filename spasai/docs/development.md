@@ -269,10 +269,19 @@ cd spasai/apps/mobile/android
 Проверить, что подписалось вашим ключом, а не отладочным:
 
 ```sh
-keytool -printcert -jarfile app/build/outputs/apk/release/app-release.apk
+# путь к apksigner: <ANDROID_HOME>/build-tools/<версия>/apksigner
+$ANDROID_HOME/build-tools/35.0.0/apksigner verify --print-certs \
+  app/build/outputs/apk/release/app-release.apk
 ```
 
-В строке `Владелец` должны быть ваши данные, а не `CN=Android Debug`.
+Должно вывести `Signer #1 certificate DN: CN=...` с вашими данными.
+Если там `CN=Android Debug` — свойства `SPASAI_*` не подхватились,
+проверьте путь к `gradle.properties` и что в пути к хранилищу прямые
+слеши.
+
+`keytool -printcert -jarfile` для этого не годится: он читает только
+старую подпись v1, а Android давно подписывает по схеме v2, и на
+нормально подписанном APK команда отвечает «Not a signed jar file».
 
 ---
 
