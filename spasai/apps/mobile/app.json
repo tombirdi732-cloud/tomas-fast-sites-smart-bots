@@ -54,7 +54,8 @@
           "android_useYandexMapKitLite": true,
           "ios_useYandexMapKitLite": true
         }
-      ]
+      ],
+      "./plugins/withReleaseSigning.js"
     ],
     "extra": {
       "apiUrl": "https://tomas-it.ru/api"
