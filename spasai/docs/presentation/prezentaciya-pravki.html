@@ -1,0 +1,761 @@
+<title>Спасай — приложение для еды с истекающим сроком</title>
+
+<style>
+  /* Палитра взята из самого приложения: зелёный #21A038 и прохладные
+     нейтральные с лёгким уходом в зелень — чтобы документ и продукт
+     читались как одна вещь. */
+  :root {
+    --ground: #f2f5f3;
+    --surface: #ffffff;
+    --surface-sunk: #e9eeeb;
+    --ink: #15181a;
+    --soft: #5f6b66;
+    --faint: #8b968f;
+    --rule: #dfe7e2;
+    --accent: #21a038;
+    --accent-deep: #12551f;
+    --accent-wash: #e6f3ea;
+    --amber: #b25c0a;
+    --amber-wash: #fbeedd;
+
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Inter", Roboto,
+      "Helvetica Neue", Arial, sans-serif;
+    --mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas,
+      "Liberation Mono", monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #0f1214;
+      --surface: #181c1e;
+      --surface-sunk: #212729;
+      --ink: #eef2f0;
+      --soft: #9ba6a1;
+      --faint: #6d7873;
+      --rule: #272d30;
+      --accent: #3ebe58;
+      --accent-deep: #8fe0a2;
+      --accent-wash: #14301c;
+      --amber: #e8963c;
+      --amber-wash: #33240f;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --ground: #0f1214;
+    --surface: #181c1e;
+    --surface-sunk: #212729;
+    --ink: #eef2f0;
+    --soft: #9ba6a1;
+    --faint: #6d7873;
+    --rule: #272d30;
+    --accent: #3ebe58;
+    --accent-deep: #8fe0a2;
+    --accent-wash: #14301c;
+    --amber: #e8963c;
+    --amber-wash: #33240f;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 17px;
+    line-height: 1.62;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap {
+    max-width: 1060px;
+    margin: 0 auto;
+    padding: 0 28px 96px;
+  }
+
+  /* Проза уже общей колонки: длинная строка читается хуже. */
+  .prose { max-width: 68ch; }
+
+  a { color: var(--accent-deep); }
+
+  /* ── Шапка ─────────────────────────────────────────────────────── */
+  header {
+    background: var(--accent);
+    color: #fff;
+    padding: 64px 0 56px;
+    margin-bottom: 64px;
+  }
+
+  header .wrap { padding-bottom: 0; }
+
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 40px;
+  }
+
+  .brand svg { width: 40px; height: 40px; display: block; }
+
+  .brand b {
+    font-size: 19px;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+  }
+
+  h1 {
+    font-size: clamp(34px, 5.4vw, 54px);
+    line-height: 1.08;
+    letter-spacing: -0.025em;
+    font-weight: 800;
+    margin: 0 0 22px;
+    text-wrap: balance;
+    max-width: 17ch;
+  }
+
+  .lead {
+    font-size: clamp(18px, 2.2vw, 22px);
+    line-height: 1.5;
+    color: #dff1e4;
+    max-width: 56ch;
+    margin: 0;
+  }
+
+  /* ── Полоса фактов ─────────────────────────────────────────────── */
+  .facts {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    gap: 1px;
+    background: rgba(255, 255, 255, 0.28);
+    border: 1px solid rgba(255, 255, 255, 0.28);
+    margin-top: 48px;
+  }
+
+  .facts div { background: var(--accent); padding: 18px 20px; }
+
+  .facts dt {
+    font: 600 11px/1 var(--mono);
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: #b6ddc0;
+    margin-bottom: 9px;
+  }
+
+  .facts dd { margin: 0; font-weight: 650; font-size: 16px; }
+
+  /* ── Секции ────────────────────────────────────────────────────── */
+  section { margin-top: 68px; }
+
+  .eyebrow {
+    font: 600 11px/1 var(--mono);
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--accent-deep);
+    display: block;
+    margin-bottom: 12px;
+  }
+
+  h2 {
+    font-size: clamp(24px, 3vw, 31px);
+    line-height: 1.2;
+    letter-spacing: -0.018em;
+    font-weight: 750;
+    margin: 0 0 20px;
+    text-wrap: balance;
+  }
+
+  h3 {
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: -0.005em;
+    margin: 0 0 10px;
+  }
+
+  p { margin: 0 0 16px; }
+  p:last-child { margin-bottom: 0; }
+
+  .hr {
+    height: 1px;
+    background: var(--rule);
+    border: 0;
+    margin: 0;
+  }
+
+  /* ── Карточки и сетки ──────────────────────────────────────────── */
+  .cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 18px;
+  }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: 14px;
+    padding: 22px 24px;
+  }
+
+  .card p { color: var(--soft); font-size: 16px; }
+
+  /* ── Пошаговые сценарии ────────────────────────────────────────── */
+  .flows {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 34px;
+  }
+
+  .flow h3 {
+    padding-bottom: 12px;
+    border-bottom: 2px solid var(--accent);
+    margin-bottom: 4px;
+  }
+
+  /* Порядок здесь несёт смысл: это последовательность, а не список. */
+  .flow ol {
+    list-style: none;
+    counter-reset: step;
+    margin: 0;
+    padding: 0;
+  }
+
+  .flow li {
+    counter-increment: step;
+    display: grid;
+    grid-template-columns: 30px 1fr;
+    gap: 14px;
+    padding: 18px 0;
+    border-bottom: 1px solid var(--rule);
+  }
+
+  .flow li::before {
+    content: counter(step);
+    font: 700 13px/28px var(--mono);
+    text-align: center;
+    color: var(--accent-deep);
+    background: var(--accent-wash);
+    border-radius: 50%;
+    height: 28px;
+  }
+
+  /* Оба текстовых блока — во вторую колонку: иначе описание уезжает
+     под номер шага, в тридцать пикселей шириной. */
+  .flow li b,
+  .flow li span { grid-column: 2; }
+
+  .flow li b { display: block; font-weight: 660; margin-bottom: 3px; }
+  .flow li span { color: var(--soft); font-size: 15.5px; }
+
+  /* ── Таблицы ───────────────────────────────────────────────────── */
+  .table-wrap { overflow-x: auto; }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 16px;
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: 14px;
+    overflow: hidden;
+  }
+
+  th {
+    text-align: left;
+    font: 600 11px/1 var(--mono);
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+    color: var(--faint);
+    padding: 15px 20px;
+    border-bottom: 1px solid var(--rule);
+    white-space: nowrap;
+  }
+
+  td {
+    padding: 15px 20px;
+    border-bottom: 1px solid var(--rule);
+    vertical-align: top;
+  }
+
+  tbody tr:last-child td { border-bottom: 0; }
+  td.what { font-weight: 620; }
+  td.note { color: var(--soft); font-size: 15.5px; }
+
+  .chip {
+    display: inline-block;
+    white-space: nowrap;
+    font: 650 12px/1 var(--sans);
+    padding: 6px 11px;
+    border-radius: 999px;
+    background: var(--accent-wash);
+    color: var(--accent-deep);
+  }
+
+  .chip--wait { background: var(--amber-wash); color: var(--amber); }
+  .chip--none { background: var(--surface-sunk); color: var(--soft); }
+
+  /* ── Картинки ──────────────────────────────────────────────────── */
+  figure { margin: 0; }
+
+  figure img {
+    display: block;
+    width: 100%;
+    height: auto;
+    border-radius: 14px;
+    border: 1px solid var(--rule);
+    background: var(--surface);
+  }
+
+  figcaption {
+    color: var(--faint);
+    font-size: 14.5px;
+    margin-top: 12px;
+  }
+
+  /* ── Чек ───────────────────────────────────────────────────────── */
+  /* Главный предмет продукта — чек с кодом выдачи. Экономику
+     показываем в его же виде, один раз за документ. */
+  .receipt {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: 14px;
+    padding: 26px 28px;
+    max-width: 460px;
+    font-family: var(--mono);
+    font-size: 15px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .receipt div {
+    display: flex;
+    justify-content: space-between;
+    gap: 20px;
+    padding: 11px 0;
+    border-bottom: 1px dashed var(--rule);
+  }
+
+  .receipt div:last-child {
+    border-bottom: 0;
+    border-top: 2px solid var(--ink);
+    margin-top: 6px;
+    padding-top: 14px;
+    font-weight: 700;
+  }
+
+  .receipt span:first-child { color: var(--soft); }
+
+  ul.plain {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  ul.plain li {
+    padding: 11px 0 11px 22px;
+    border-bottom: 1px solid var(--rule);
+    color: var(--soft);
+    position: relative;
+    font-size: 16px;
+  }
+
+  ul.plain li:last-child { border-bottom: 0; }
+
+  ul.plain li::before {
+    content: "";
+    position: absolute;
+    left: 2px;
+    top: 21px;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--accent);
+  }
+
+  ul.plain li b { color: var(--ink); font-weight: 620; }
+
+  .fill {
+    background: var(--amber-wash);
+    color: var(--amber);
+    border-radius: 4px;
+    padding: 1px 7px;
+    font: 600 14px var(--mono);
+  }
+
+  footer {
+    margin-top: 76px;
+    padding-top: 30px;
+    border-top: 2px solid var(--ink);
+    color: var(--soft);
+    font-size: 15.5px;
+  }
+
+  /* Печать и выгрузка в PDF. Поля задаёт @page, поэтому у колонки
+     собственных отступов уже нет — иначе они складываются. */
+  @page {
+    size: A4;
+    margin: 14mm 13mm;
+  }
+
+  @media print {
+    body {
+      background: #fff;
+      font-size: 10.5pt;
+      line-height: 1.5;
+    }
+
+    .wrap { max-width: none; padding: 0; }
+
+    header {
+      padding: 24px 22px;
+      margin: 0 0 26px;
+      border-radius: 12px;
+      break-inside: avoid;
+    }
+
+    header .wrap { padding: 0; }
+    .brand { margin-bottom: 22px; }
+    h1 { font-size: 26pt; margin-bottom: 12px; }
+    .lead { font-size: 12pt; }
+
+    /* На листе A4 автоподбор оставляет в полосе фактов пустую ячейку —
+       раскладываем ровно два на два. */
+    .facts {
+      margin-top: 24px;
+      grid-template-columns: 1fr 1fr;
+    }
+
+    section { margin-top: 22px; }
+    h2 { font-size: 15pt; margin-bottom: 11px; }
+    h3 { font-size: 11pt; }
+    ul.plain li { padding: 8px 0 8px 22px; }
+    ul.plain li::before { top: 18px; }
+    .card { padding: 16px 18px; }
+    .flow li { padding: 13px 0; }
+
+    /* Ни надзаголовок, ни заголовок не остаются в одиночестве
+       на дне страницы. */
+    .eyebrow, h2, h3 { break-after: avoid; }
+    figure, table, .receipt, .card, .flow, ul.plain li { break-inside: avoid; }
+
+    /* Картинку нельзя разорвать между страницами, поэтому целиком она
+       не влезала и уносила за собой пустую половину листа. Ограничиваем
+       высоту — помещается там же, где закончился текст. */
+    figure img {
+      max-height: 148mm;
+      width: auto;
+      max-width: 100%;
+      margin: 0 auto;
+    }
+
+    .prose { max-width: none; }
+    footer { margin-top: 30px; break-inside: avoid; }
+  }
+</style>
+
+<header>
+  <div class="wrap">
+    <div class="brand">
+      <svg viewBox="0 0 64 64" role="img" aria-label="Спасай">
+        <rect width="64" height="64" rx="14" fill="#fff" />
+        <path
+          fill="#21a038"
+          d="M17 17.5l3.6-3.5 3.6 3.5 3.6-3.5 3.6 3.5 3.6-3.5 3.6 3.5 3.6-3.5 1.4 1.4v27.7a4 4 0 0 1-4 4H21a4 4 0 0 1-4-4z"
+        />
+        <circle cx="29.5" cy="33" r="8.6" fill="none" stroke="#fff" stroke-width="2.6" />
+        <path
+          fill="none"
+          stroke="#fff"
+          stroke-width="2.6"
+          stroke-linecap="round"
+          d="M29.5 27.4V33l4.6 3.1"
+        />
+      </svg>
+      <b>СПАСАЙ</b>
+    </div>
+
+    <h1>Приложение для еды, которую вечером всё равно спишут</h1>
+    <p class="lead">
+      Пекарня, кофейня или магазин выставляет то, что не продалось за день, со
+      скидкой. Покупатель бронирует в приложении, приходит к закрытию и
+      забирает.
+    </p>
+
+    <dl class="facts">
+      <div><dt>Что это</dt><dd>Приложение и панель для заведений</dd></div>
+      <div><dt>Платформы</dt><dd>Android, панель в браузере</dd></div>
+      <div><dt>Статус</dt><dd>Работает, боевой сервер</dd></div>
+      <div><dt>Оплата</dt><dd>На кассе при получении</dd></div>
+    </dl>
+  </div>
+</header>
+
+<div class="wrap">
+  <section style="margin-top: 0">
+    <span class="eyebrow">Зачем</span>
+    <h2>Что это решает</h2>
+    <div class="prose">
+      <p>
+        У пекарни к вечеру остаётся выпечка, у кулинарии — готовые блюда, у
+        магазина — товар, до конца срока которого сутки. По полной цене это уже
+        не продать, а деньги на него потрачены: мука куплена, повар отработал,
+        аренда оплачена. Обычно всё это списывают.
+      </p>
+      <p>
+        Скидка на витрине помогает только с теми, кто и так зашёл. Нужно как-то
+        сказать людям вокруг, что вот прямо сейчас у вас есть еда за треть цены.
+        «Спасай» этим и занимается.
+      </p>
+      <p>
+        Доставки нет: покупатель приходит сам, в то время, которое назначило
+        заведение. Поэтому нет ни курьеров, ни расходов на них, а у заведения
+        не появляется новой работы — собрали бокс, выставили, отдали по коду.
+      </p>
+    </div>
+  </section>
+
+  <section>
+    <span class="eyebrow">Как это работает</span>
+    <h2>По три шага с каждой стороны</h2>
+    <div class="flows">
+      <div class="flow">
+        <h3>Покупатель</h3>
+        <ol>
+          <li>
+            <b>Открывает приложение</b>
+            <span>Видит, что есть рядом: цена, скидка, сколько идти и до
+              какого числа годен товар. Ближайшее — сверху.</span>
+          </li>
+          <li>
+            <b>Бронирует бокс</b>
+            <span>Заведение придержит его до конца времени выдачи. Передумал —
+              отменяет: 15 минут после заказа или за два часа до выдачи.</span>
+          </li>
+          <li>
+            <b>Забирает по коду</b>
+            <span>Называет шесть цифр на кассе и платит на месте. Предоплаты
+              нет, поэтому нет и возвратов.</span>
+          </li>
+        </ol>
+      </div>
+
+      <div class="flow">
+        <h3>Заведение</h3>
+        <ol>
+          <li>
+            <b>Регистрируется по ИНН</b>
+            <span>Реквизиты подставляются сами, заявка уходит на проверку.</span>
+          </li>
+          <li>
+            <b>Выставляет бокс</b>
+            <span>Что внутри, обычная цена и цена со скидкой, сколько штук,
+              когда забирать, до какого числа годен.</span>
+          </li>
+          <li>
+            <b>Выдаёт по коду</b>
+            <span>Вводит код покупателя в панели. Если что-то пошло не так —
+              отменяет заказ сам, бокс возвращается в продажу.</span>
+          </li>
+        </ol>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <span class="eyebrow">Приложение</span>
+    <h2>Экраны</h2>
+    <figure>
+      <img src="screens-1.jpg" alt="Пять экранов покупки: лента боксов рядом, карточка бокса, оформление, код выдачи, мои заказы" />
+      <figcaption>Покупка целиком: от ленты до кода, который называют на кассе.</figcaption>
+    </figure>
+    <figure style="margin-top: 22px">
+      <img src="screens-2.jpg" alt="Пять остальных экранов: избранное, профиль и три экрана знакомства с приложением" />
+      <figcaption>
+        Избранное, профиль и знакомство при первом запуске. Заведения на
+        скриншотах тестовые: в боевой базе только настоящие, прошедшие проверку.
+      </figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <span class="eyebrow">Панель заведения</span>
+    <h2>Открывается в браузере, ставить ничего не надо</h2>
+    <div class="prose">
+      <p>
+        Отдельного терминала нет — панель работает на том же компьютере или
+        планшете, что стоит на кассе. Владелец добавляет сотрудников по
+        одноразовым кодам: кассир видит заказы и выдаёт их, но не может менять
+        цены и реквизиты.
+      </p>
+    </div>
+    <figure style="margin-top: 24px">
+      <img src="panel.jpg" alt="Панель заведения: поле ввода кода выдачи и таблица заказов с суммами, комиссией и кнопкой отмены" />
+      <figcaption>Заказы: выдача по коду, статусы, комиссия по каждому заказу.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <span class="eyebrow">Готовность</span>
+    <h2>Что уже работает, а что нет</h2>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Что</th><th>Состояние</th><th>Комментарий</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="what">Приложение покупателя</td>
+            <td><span class="chip">работает</span></td>
+            <td class="note">Android. Лента, поиск по расстоянию, карта, заказы, избранное, отмена.</td>
+          </tr>
+          <tr>
+            <td class="what">Панель заведения</td>
+            <td><span class="chip">работает</span></td>
+            <td class="note">Боксы, заказы, выдача по коду, отмена, отзывы, сотрудники.</td>
+          </tr>
+          <tr>
+            <td class="what">Регистрация заведений</td>
+            <td><span class="chip">работает</span></td>
+            <td class="note">Проверка ИНН и подсказка адреса с координатами, дальше ручная модерация.</td>
+          </tr>
+          <tr>
+            <td class="what">Вход</td>
+            <td><span class="chip">работает</span></td>
+            <td class="note">Через Яндекс ID — бесплатно и без SMS. Вход по SMS написан, включается ключами провайдера.</td>
+          </tr>
+          <tr>
+            <td class="what">Онлайн-оплата</td>
+            <td><span class="chip chip--wait">нужны ключи</span></td>
+            <td class="note">ЮKassa подключена в коде, включается ключами магазина. Пока платят на кассе.</td>
+          </tr>
+          <tr>
+            <td class="what">Пуш-уведомления</td>
+            <td><span class="chip chip--wait">нужен доступ</span></td>
+            <td class="note">Код готов, нужен сервисный аккаунт FCM.</td>
+          </tr>
+          <tr>
+            <td class="what">Фотографии боксов</td>
+            <td><span class="chip chip--none">в работе</span></td>
+            <td class="note">Хранилище поднято, загрузки из панели пока нет — вместо фото значок категории.</td>
+          </tr>
+          <tr>
+            <td class="what">Версия для iPhone</td>
+            <td><span class="chip chip--none">нет</span></td>
+            <td class="note">Приложение написано так, что собрать можно; нужен аккаунт разработчика Apple.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <span class="eyebrow">Проверки</span>
+    <h2>Что мешает продать просрочку и накрутить рейтинг</h2>
+    <div class="cards">
+      <div class="card">
+        <h3>Просроченное не выставить</h3>
+        <p>
+          Срок годности должен заканчиваться позже времени выдачи. Проверка
+          стоит и в приложении, и в самой базе данных.
+        </p>
+      </div>
+      <div class="card">
+        <h3>Больше, чем есть, не продать</h3>
+        <p>
+          Остаток списывается с блокировкой строки. Двое, нажавшие «купить» на
+          последний бокс одновременно, не получат его оба.
+        </p>
+      </div>
+      <div class="card">
+        <h3>Отзыв только после выдачи</h3>
+        <p>
+          Оценку оставляет тот, чей заказ отмечен выданным. С пустых аккаунтов
+          рейтинг не накрутить.
+        </p>
+      </div>
+      <div class="card">
+        <h3>Скидка от настоящей цены</h3>
+        <p>
+          Заведение указывает обычную цену и цену бокса, процент считает
+          система. «−90%» из воздуха не нарисовать.
+        </p>
+      </div>
+      <div class="card">
+        <h3>Заведения проверяются</h3>
+        <p>
+          Регистрация по ИНН со сверкой в реестре, дальше ручная модерация.
+          Нарушителя администратор отключает одной кнопкой.
+        </p>
+      </div>
+      <div class="card">
+        <h3>Никаких выдуманных витрин</h3>
+        <p>
+          Тестовые данные технически не запускаются на боевом сервере. В базе
+          только настоящие заведения и настоящие боксы.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <span class="eyebrow">Деньги</span>
+    <h2>Комиссия с заведения, с покупателя — ничего</h2>
+    <div class="prose">
+      <p>
+        Приложение бесплатное, сервисного сбора нет. Процент берётся с
+        заведения — с денег, которых без приложения у него бы и не было.
+      </p>
+    </div>
+
+    <div class="receipt" style="margin-top: 24px">
+      <div><span>Обычная цена бокса</span><span>900 ₽</span></div>
+      <div><span>Цена в «Спасае» (−67%)</span><span>299 ₽</span></div>
+      <div><span>Комиссия платформы, 20%</span><span>59,80 ₽</span></div>
+      <div><span>Заведению</span><span>239,20 ₽</span></div>
+    </div>
+
+    <div class="prose" style="margin-top: 24px">
+      <p>
+        Процент настраивается по каждому заведению отдельно. Сейчас деньги идут
+        мимо платформы: покупатель платит на кассе. Принимать чужие платежи
+        нельзя без агентского договора и кассы по 54-ФЗ, поэтому онлайн-оплата
+        включится позже — код для неё уже написан, нужны только ключи
+        и документы.
+      </p>
+    </div>
+  </section>
+
+  <section>
+    <span class="eyebrow">Как устроено</span>
+    <h2>Техническая часть</h2>
+    <ul class="plain">
+      <li><b>Приложение</b> — React Native (Expo), Android; карты — Яндекс MapKit.</li>
+      <li><b>Панель и админка</b> — React, работают в браузере без установки.</li>
+      <li><b>Сервер</b> — NestJS и PostgreSQL с PostGIS: «рядом со мной» считается по настоящим расстояниям, с географическим индексом, а не по квадрату координат.</li>
+      <li><b>Деньги</b> — целыми копейками, без дробных чисел. Даты — в UTC, с часовым поясом заведения для показа.</li>
+      <li><b>Развёртывание</b> — Docker, одна команда на чистом сервере: поднимает базу, выпускает сертификат, ставит бэкапы и продление.</li>
+      <li><b>Проверки</b> — автотесты на правила заказов и подсчёт денег, статический анализ на каждое изменение.</li>
+    </ul>
+  </section>
+
+  <section>
+    <span class="eyebrow">Дальше</span>
+    <h2>Что нужно, чтобы запуститься</h2>
+    <ul class="plain">
+      <li><b>Первые заведения.</b> Приложение готово, но витрина наполняется только теми, кто подключился. Начинать логично с одного района: чтобы человеку было куда идти пешком.</li>
+      <li><b>Публикация в RuStore.</b> Карточка со скриншотами и описанием собрана, приложение подписывается своим ключом.</li>
+      <li><b>Онлайн-оплата.</b> Когда появятся ИП или юрлицо и договор с банком — переключается настройкой.</li>
+      <li><b>Фотографии боксов и пуши.</b> Ближайшее, что доделывается в самом приложении.</li>
+      <li><b>iPhone.</b> Отдельная сборка, нужен аккаунт разработчика Apple.</li>
+    </ul>
+  </section>
+
+  <footer>
+    <p>
+      «Спасай» · <a href="https://tomas-it.ru">tomas-it.ru</a> · приложение
+      версии 0.6.0 для Android
+    </p>
+    <p>
+      Контакты: <span class="fill">имя</span>
+      <span class="fill">телефон</span> <span class="fill">почта</span>
+    </p>
+  </footer>
+</div>
